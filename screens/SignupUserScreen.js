@@ -174,7 +174,7 @@ const styles = StyleSheet.create({
   registerText: { 
     textAlign: 'center', 
     fontWeight: 'bold', 
-    fontSize: 20, 
+    fontSize: 29, 
     color: '#000',
   },
 });

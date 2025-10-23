@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, Image } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -21,7 +22,7 @@ export default function LoginScreen({ navigation }) {
       />
 
       {/* Location under Logo */}
-      <Text style={styles.locationText}>Only in San Fernando, Pampanga</Text>
+      <Text style={styles.locationText}>Only in San Fernando, Pampanga.</Text>
 
       {/* Email Input */}
       <TextInput
@@ -77,7 +78,7 @@ const styles = StyleSheet.create({
     padding: 20,
   },
   appTitle: {
-    fontSize: 34,
+    fontSize: 30,
     fontWeight: 'bold',
     color: '#fff',
     textShadowColor: 'rgba(0, 0, 0, 0.8)',
@@ -92,7 +93,7 @@ const styles = StyleSheet.create({
     resizeMode: 'contain',
   },
     locationText: {
-    fontSize: 15,
+    fontSize: 13,
     fontWeight: 'bold',
     color: '#fff',
     marginBottom: 40,
@@ -121,7 +122,7 @@ const styles = StyleSheet.create({
     marginBottom: 25,
   },
   buttonText: {
-    fontSize: 22,
+    fontSize: 25,
     fontWeight: 'bold',
     color: '#ff1a1a',
   },
@@ -145,7 +146,7 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontWeight: 'bold',
     textAlign: 'center',
-    fontSize: 18,
+    fontSize: 20,
     textShadowColor: 'rgba(0, 0, 0, 0.8)',
     textShadowOffset: { width: 1, height: 1 },
     textShadowRadius: 2,
