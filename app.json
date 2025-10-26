@@ -13,7 +13,13 @@
       "backgroundColor": "#ffffff"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSCameraUsageDescription": "This app needs camera access to record videos",
+        "NSMicrophoneUsageDescription": "This app needs microphone access to record audio with video",
+        "NSPhotoLibraryAddUsageDescription": "This app needs access to save videos to your photo library",
+        "NSPhotoLibraryUsageDescription": "This app needs access to load videos from your photo library"
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -21,7 +27,13 @@
         "backgroundColor": "#ffffff"
       },
       "edgeToEdgeEnabled": true,
-      "package": "com.alfonsose7.Safekafe"
+      "package": "com.alfonsose7.Safekafe",
+      "permissions": [
+        "CAMERA",
+        "RECORD_AUDIO",
+        "WRITE_EXTERNAL_STORAGE",
+        "READ_EXTERNAL_STORAGE"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"

@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState, useContext } from "react";
 import {
   View,
   Text,
@@ -8,18 +8,19 @@ import {
   Alert,
   Linking,
   SafeAreaView,
+  Modal,
+  Platform,
+  StatusBar,
 } from "react-native";
 import Icon from "react-native-vector-icons/MaterialIcons";
-import { StatusBar, Platform } from "react-native";
+import { ThemeContext } from "../ThemeContext"; // ✅ Import context
 
-
-
-// Hotline numbers (replace with your local ones later)
+// Hotline numbers
 const POLICE_NUMBER = "tel:911";
 const HOSPITAL_NUMBER = "tel:912";
 const FIRESTATION_NUMBER = "tel:913";
 
-// Import icons (supports .png and .jpg)
+// Icons
 const icons = {
   police: require("../assets/police.png"),
   hospital: require("../assets/hospital.png"),
@@ -31,6 +32,9 @@ const icons = {
 };
 
 const DashboardScreen = ({ navigation }) => {
+  const [menuVisible, setMenuVisible] = useState(false);
+  const { isDarkMode } = useContext(ThemeContext); // ✅ Get dark mode state
+
   // Confirm + Call function
   const handleEmergencyCall = (service, number) => {
     Alert.alert(
@@ -43,20 +47,38 @@ const DashboardScreen = ({ navigation }) => {
     );
   };
 
+  // ✅ Themed styles
+  const themeStyles = {
+    container: {
+      backgroundColor: isDarkMode ? "#121212" : "#fff",
+    },
+    card: {
+      backgroundColor: isDarkMode ? "#1E1E1E" : "#f8f8f8",
+    },
+    text: {
+      color: isDarkMode ? "#fff" : "#333",
+    },
+    menuContainer: {
+      backgroundColor: isDarkMode ? "#1E1E1E" : "#fff",
+    },
+    menuText: {
+      color: isDarkMode ? "#fff" : "#333",
+    },
+  };
+
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <View style={styles.container}>
-        {/* Top Header */}
+    <SafeAreaView
+      style={[styles.safeArea, { backgroundColor: "#A83232" }]}
+    >
+      <View style={[styles.container, themeStyles.container]}>
+        {/* Header */}
         <View style={styles.header}>
-          {/* Left Menu Button */}
-          <TouchableOpacity>
+          <TouchableOpacity onPress={() => setMenuVisible(true)}>
             <Icon name="menu" size={28} color="#fff" />
           </TouchableOpacity>
 
-          {/* Title */}
           <Text style={styles.headerTitle}>Safe Ka Fernandino!</Text>
 
-          {/* Profile Button */}
           <TouchableOpacity
             onPress={() => navigation.navigate("UserPageScreen")}
           >
@@ -68,75 +90,176 @@ const DashboardScreen = ({ navigation }) => {
         <View style={styles.grid}>
           {/* Police */}
           <TouchableOpacity
-            style={styles.card}
+            style={[styles.card, themeStyles.card]}
             onPress={() => handleEmergencyCall("Police", POLICE_NUMBER)}
           >
             <Image source={icons.police} style={styles.icon} />
-            <Text style={styles.label}>Police</Text>
+            <Text style={[styles.label, themeStyles.text]}>Police</Text>
           </TouchableOpacity>
 
           {/* Hospital */}
           <TouchableOpacity
-            style={styles.card}
+            style={[styles.card, themeStyles.card]}
             onPress={() => handleEmergencyCall("Hospital", HOSPITAL_NUMBER)}
           >
             <Image source={icons.hospital} style={styles.icon} />
-            <Text style={styles.label}>Hospital</Text>
+            <Text style={[styles.label, themeStyles.text]}>Hospital</Text>
           </TouchableOpacity>
 
           {/* Fire Station */}
           <TouchableOpacity
-            style={styles.card}
-            onPress={() => handleEmergencyCall("Fire Station", FIRESTATION_NUMBER)}
+            style={[styles.card, themeStyles.card]}
+            onPress={() =>
+              handleEmergencyCall("Fire Station", FIRESTATION_NUMBER)
+            }
           >
             <Image source={icons.firestation} style={styles.icon} />
-            <Text style={styles.label}>Fire Station</Text>
+            <Text style={[styles.label, themeStyles.text]}>Fire Station</Text>
           </TouchableOpacity>
 
           {/* Shortcuts */}
-          <TouchableOpacity style={styles.card}>
+          <TouchableOpacity style={[styles.card, themeStyles.card]}>
             <Image source={icons.shortcuts} style={styles.icon} />
-            <Text style={styles.label}>Shortcuts</Text>
+            <Text style={[styles.label, themeStyles.text]}>Shortcuts</Text>
           </TouchableOpacity>
 
           {/* Set-Up */}
           <TouchableOpacity
-            style={styles.card}
+            style={[styles.card, themeStyles.card]}
             onPress={() => navigation.navigate("Setup")}
           >
             <Image source={icons.setup} style={styles.icon} />
-            <Text style={styles.label}>Set-Up</Text>
+            <Text style={[styles.label, themeStyles.text]}>Set-Up</Text>
           </TouchableOpacity>
 
           {/* Nearby Rescuer */}
-          <TouchableOpacity style={styles.card}>
+          <TouchableOpacity style={[styles.card, themeStyles.card]}>
             <Image source={icons.nearby} style={styles.icon} />
-            <Text style={styles.label}>Nearby Rescuer</Text>
+            <Text style={[styles.label, themeStyles.text]}>Nearby Rescuer</Text>
           </TouchableOpacity>
 
           {/* Record Video */}
-          <TouchableOpacity 
-              style={styles.card}
-              onPress={() => navigation.navigate("RecordVideoScreen")}
+          <TouchableOpacity
+            style={[styles.card, themeStyles.card]}
+            onPress={() => navigation.navigate("RecordVideoScreen")}
           >
             <Image source={icons.record} style={styles.icon} />
-            <Text style={styles.label}>Record Video</Text>
+            <Text style={[styles.label, themeStyles.text]}>Record Video</Text>
           </TouchableOpacity>
         </View>
+
+        {/* Slide Menu Modal */}
+        <Modal
+          animationType="slide"
+          transparent={true}
+          visible={menuVisible}
+          onRequestClose={() => setMenuVisible(false)}
+        >
+          <TouchableOpacity
+            style={styles.modalOverlay}
+            activeOpacity={1}
+            onPressOut={() => setMenuVisible(false)}
+          >
+            <View style={[styles.menuContainer, themeStyles.menuContainer]}>
+              <TouchableOpacity
+                style={styles.menuItem}
+                onPress={() => {
+                  setMenuVisible(false);
+                  navigation.navigate("CPRScreen");
+                }}
+              >
+                <Text style={[styles.menuText, themeStyles.menuText]}>
+                  How to CPR
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.menuItem}
+                onPress={() => {
+                  setMenuVisible(false);
+                  navigation.navigate("WoundCareScreen");
+                }}
+              >
+                <Text style={[styles.menuText, themeStyles.menuText]}>
+                  Wound Care
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.menuItem}
+                onPress={() => {
+                  setMenuVisible(false);
+                  navigation.navigate("SkinBurnScreen");
+                }}
+              >
+                <Text style={[styles.menuText, themeStyles.menuText]}>
+                  Skin Burn
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.menuItem}
+                onPress={() => {
+                  setMenuVisible(false);
+                  navigation.navigate("TutorialScreen");
+                }}
+              >
+                <Text style={[styles.menuText, themeStyles.menuText]}>
+                  Tutorial
+                </Text>
+              </TouchableOpacity>
+
+              {/* Footer options */}
+              <View style={styles.menuFooter}>
+                <TouchableOpacity
+                  style={styles.menuButton}
+                  onPress={() => navigation.navigate("SettingsScreen")}
+                >
+                  <Text style={[styles.menuText, themeStyles.menuText]}>
+                    ⚙️ Settings
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.menuItem}
+                  onPress={() => {
+                    setMenuVisible(false);
+                    navigation.navigate("ReachOutScreen");
+                  }}
+                >
+                  <Text style={[styles.menuText, themeStyles.menuText]}>
+                    Reach Out
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.menuItem}
+                  onPress={() => {
+                    setMenuVisible(false);
+                    navigation.navigate("FeedbackScreen");
+                  }}
+                >
+                  <Text style={[styles.menuText, themeStyles.menuText]}>
+                    Feedback
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </TouchableOpacity>
+        </Modal>
       </View>
     </SafeAreaView>
   );
 };
 
-// BASIC + CLEAN styling
+// Styles
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: "#A83232", // match header background
+    backgroundColor: "#A83232",
   },
   container: {
     flex: 1,
-    backgroundColor: "#fff", // clean white background
   },
   header: {
     flexDirection: "row",
@@ -144,7 +267,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     paddingHorizontal: 15,
     paddingVertical: 12,
-    backgroundColor: "#A83232", // red theme
+    backgroundColor: "#A83232",
     paddingTop: Platform.OS === "android" ? StatusBar.currentHeight : 0,
   },
   headerTitle: {
@@ -163,13 +286,12 @@ const styles = StyleSheet.create({
   },
   card: {
     width: "40%",
-    backgroundColor: "#f8f8f8",
     borderRadius: 10,
     padding: 15,
     marginVertical: 10,
     alignItems: "center",
-    elevation: 3, // subtle shadow for Android
-    shadowColor: "#000", // iOS shadow
+    elevation: 3,
+    shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.2,
     shadowRadius: 3,
@@ -183,9 +305,27 @@ const styles = StyleSheet.create({
   label: {
     fontSize: 15,
     fontWeight: "bold",
-    color: "#333",
     textAlign: "center",
-    flexShrink: 1, // text won't cut off
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "flex-start",
+  },
+  menuContainer: {
+    paddingVertical: 20,
+    paddingHorizontal: 15,
+  },
+  menuItem: {
+    paddingVertical: 12,
+  },
+  menuText: {
+    fontSize: 18,
+  },
+  menuFooter: {
+    borderTopWidth: 1,
+    borderTopColor: "#ccc",
+    marginTop: 20,
   },
 });
 

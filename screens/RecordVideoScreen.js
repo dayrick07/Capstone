@@ -1,167 +1,75 @@
 import React, { useState, useEffect, useRef } from "react";
-import {
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
-  SafeAreaView,
-  Image,
-} from "react-native";
+import { View, Text, TouchableOpacity, SafeAreaView, StyleSheet, FlatList } from "react-native";
 import { Camera } from "expo-camera";
-console.log("Camera:", Camera);
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import Icon from "react-native-vector-icons/MaterialIcons";
+import * as FileSystem from "expo-file-system";
 
-const RecordVideoScreen = ({ navigation }) => {
-  const [hasCameraPermission, setHasCameraPermission] = useState(null);
-  const [hasAudioPermission, setHasAudioPermission] = useState(null);
-  const [isRecording, setIsRecording] = useState(false);
-  const [photoUri, setPhotoUri] = useState(null);
-  const [videoUri, setVideoUri] = useState(null);
-
+export default function RecordVideoScreen({ navigation }) {
   const cameraRef = useRef(null);
+  const [hasPermission, setHasPermission] = useState(null);
+  const [isRecording, setIsRecording] = useState(false);
+  const [videos, setVideos] = useState([]);
 
-  // 🔹 Safe fallback for Camera type
-  const [cameraType, setCameraType] = useState(
-    Camera?.Constants?.Type?.back || 1
-  );
-
-  // Request permissions
   useEffect(() => {
     (async () => {
-      try {
-        const { status: cameraStatus } = await Camera.requestCameraPermissionsAsync();
-        setHasCameraPermission(cameraStatus === "granted");
+      const { status } = await Camera.requestCameraPermissionsAsync();
+      setHasPermission(status === "granted");
 
-        const { status: audioStatus } = await Camera.requestMicrophonePermissionsAsync();
-        setHasAudioPermission(audioStatus === "granted");
-      } catch (error) {
-        console.log("Permission error:", error);
-      }
+      // Load saved videos from internal storage
+      const files = await FileSystem.readDirectoryAsync(FileSystem.documentDirectory);
+      const savedVideos = files.filter(f => f.endsWith(".mp4")).map(f => FileSystem.documentDirectory + f);
+      setVideos(savedVideos);
     })();
   }, []);
 
-  // Save media to AsyncStorage
-  const saveMedia = async (key, uri) => {
-    try {
-      await AsyncStorage.setItem(key, uri);
-      console.log(`${key} saved: ${uri}`);
-    } catch (error) {
-      console.log("Error saving media:", error);
+  if (hasPermission === null) return <Text>Loading...</Text>;
+  if (hasPermission === false) return <Text>No access to camera</Text>;
+
+  const handleRecord = async () => {
+    if (!cameraRef.current) return;
+
+    if (!isRecording) {
+      setIsRecording(true);
+      const video = await cameraRef.current.recordAsync();
+      const fileName = `${FileSystem.documentDirectory}video_${Date.now()}.mp4`;
+      await FileSystem.moveAsync({ from: video.uri, to: fileName });
+      setVideos(prev => [fileName, ...prev]);
+      setIsRecording(false);
+    } else {
+      cameraRef.current.stopRecording();
     }
   };
-
-  // Take photo
-  const takePhoto = async () => {
-    if (cameraRef.current) {
-      try {
-        const photo = await cameraRef.current.takePictureAsync();
-        setPhotoUri(photo.uri);
-        saveMedia("photo", photo.uri);
-      } catch (error) {
-        console.log("Error taking photo:", error);
-      }
-    }
-  };
-
-  // Record video
-  const recordVideo = async () => {
-    if (cameraRef.current) {
-      try {
-        if (!isRecording) {
-          setIsRecording(true);
-          const video = await cameraRef.current.recordAsync();
-          setVideoUri(video.uri);
-          saveMedia("video", video.uri);
-          setIsRecording(false);
-        } else {
-          cameraRef.current.stopRecording();
-        }
-      } catch (error) {
-        console.log("Error recording video:", error);
-        setIsRecording(false);
-      }
-    }
-  };
-
-  // Permissions handling
-  if (hasCameraPermission === null || hasAudioPermission === null) {
-    return (
-      <View style={styles.loadingContainer}>
-        <Text>Requesting permissions...</Text>
-      </View>
-    );
-  }
-
-  if (!hasCameraPermission || !hasAudioPermission) {
-    return (
-      <View style={styles.loadingContainer}>
-        <Text>No access to camera or microphone</Text>
-      </View>
-    );
-  }
 
   return (
-    <SafeAreaView style={styles.container}>
-      <Camera style={styles.camera} type={cameraType} ref={cameraRef}>
-        <View style={styles.buttonsContainer}>
-          {/* Photo Button */}
-          <TouchableOpacity style={styles.button} onPress={takePhoto}>
-            <Icon name="photo-camera" size={40} color="#fff" />
-            <Text style={styles.buttonText}>Photo</Text>
+    <SafeAreaView style={{ flex: 1 }}>
+      <Camera ref={cameraRef} style={{ flex: 1 }} type={Camera.Constants.Type.back}>
+        <View style={styles.controls}>
+          <TouchableOpacity style={styles.button} onPress={handleRecord}>
+            <Text style={{ color: "#fff" }}>{isRecording ? "Stop" : "Record"}</Text>
           </TouchableOpacity>
 
-          {/* Video Button */}
-          <TouchableOpacity style={styles.button} onPress={recordVideo}>
-            <Icon
-              name="videocam"
-              size={40}
-              color={isRecording ? "red" : "#fff"}
-            />
-            <Text style={styles.buttonText}>
-              {isRecording ? "Stop" : "Video"}
-            </Text>
+          <TouchableOpacity
+            style={[styles.button, { backgroundColor: "blue" }]}
+            onPress={() => navigation.navigate("Album", { videos })}
+          >
+            <Text style={{ color: "#fff" }}>Album</Text>
           </TouchableOpacity>
         </View>
       </Camera>
-
-      {/* Preview */}
-      <View style={styles.previewContainer}>
-        {photoUri && <Image source={{ uri: photoUri }} style={styles.preview} />}
-        {videoUri && (
-          <Text style={styles.previewText}>Video saved: {videoUri}</Text>
-        )}
-      </View>
     </SafeAreaView>
   );
-};
-
-export default RecordVideoScreen;
+}
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#000" },
-  camera: { flex: 1 },
-  buttonsContainer: {
+  controls: {
     flexDirection: "row",
     justifyContent: "space-around",
-    alignItems: "center",
     position: "absolute",
-    bottom: 30,
+    bottom: 20,
     width: "100%",
   },
   button: {
-    alignItems: "center",
-    backgroundColor: "#A83232",
-    padding: 10,
+    padding: 15,
+    backgroundColor: "red",
     borderRadius: 50,
   },
-  buttonText: { color: "#fff", marginTop: 5 },
-  previewContainer: {
-    position: "absolute",
-    top: 10,
-    left: 10,
-  },
-  preview: { width: 80, height: 80, borderRadius: 10, marginBottom: 5 },
-  previewText: { color: "#fff", fontSize: 12 },
-  loadingContainer: { flex: 1, justifyContent: "center", alignItems: "center" },
 });

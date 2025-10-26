@@ -14,18 +14,27 @@ const SetupScreen = ({ navigation }) => {
       </View>
 
       {/* Title */}
-      <Text style={styles.title}>Choose to Setup</Text>
+      <Text style={styles.title}>Choose Setup Type</Text>
 
       {/* Setup Options */}
-      <TouchableOpacity style={styles.optionButton}>
+      <TouchableOpacity
+        style={styles.optionButton}
+        onPress={() => navigation.navigate("VoiceSetupScreen")}
+      >
         <Text style={styles.optionText}>Voice Setup</Text>
       </TouchableOpacity>
 
-      <TouchableOpacity style={styles.optionButton}>
+      <TouchableOpacity
+        style={styles.optionButton}
+        onPress={() => navigation.navigate("PhysicalGestureSetupScreen")}
+      >
         <Text style={styles.optionText}>Physical Gesture Setup</Text>
       </TouchableOpacity>
 
-      <TouchableOpacity style={styles.optionButton}>
+      <TouchableOpacity
+        style={styles.optionButton}
+        onPress={() => navigation.navigate("ParentalSetupScreen")}
+      >
         <Text style={styles.optionText}>Parental Setup</Text>
       </TouchableOpacity>
 
@@ -45,7 +54,7 @@ const styles = StyleSheet.create({
   topBar: { flexDirection: "row", alignItems: "center", alignSelf: "flex-start", paddingLeft: 15 },
   backButton: { flexDirection: "row", alignItems: "center" },
   backText: { color: "#fff", marginLeft: 5 },
-  title: { fontSize: 18, fontWeight: "bold", color: "#fff", marginVertical: 30 },
+  title: { fontSize: 20, fontWeight: "bold", color: "#fff", marginVertical: 30 },
   optionButton: {
     backgroundColor: "#fff",
     paddingVertical: 12,
