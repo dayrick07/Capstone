@@ -13,7 +13,9 @@ import {
   StatusBar,
 } from "react-native";
 import Icon from "react-native-vector-icons/MaterialIcons";
-import { ThemeContext } from "../ThemeContext"; // ✅ Import context
+import { Ionicons } from "@expo/vector-icons";
+import { ThemeContext } from "../ThemeContext";
+import * as ImagePicker from "expo-image-picker";
 
 // Hotline numbers
 const POLICE_NUMBER = "tel:911";
@@ -28,14 +30,14 @@ const icons = {
   shortcuts: require("../assets/shortcuts.png"),
   setup: require("../assets/setup.png"),
   nearby: require("../assets/nearby.png"),
-  record: require("../assets/record.png"),
+  album: require("../assets/album.png"), // now used for Record Video
 };
 
 const DashboardScreen = ({ navigation }) => {
   const [menuVisible, setMenuVisible] = useState(false);
-  const { isDarkMode } = useContext(ThemeContext); // ✅ Get dark mode state
+  const { isDarkMode, toggleTheme } = useContext(ThemeContext);
 
-  // Confirm + Call function
+  // 🔔 Emergency call confirmation
   const handleEmergencyCall = (service, number) => {
     Alert.alert(
       `${service} Assistance`,
@@ -47,29 +49,84 @@ const DashboardScreen = ({ navigation }) => {
     );
   };
 
-  // ✅ Themed styles
+  // ✅ Choose between recording new video or picking from gallery
+  const handleRecordVideoChoice = () => {
+    Alert.alert("Record or Select", "Choose an option:", [
+      { text: "Cancel", style: "cancel" },
+      { text: "Record New Video", onPress: recordVideo },
+      { text: "Choose from Gallery", onPress: pickMedia },
+    ]);
+  };
+
+  // ✅ Record new video
+  const recordVideo = async () => {
+    const permission = await ImagePicker.requestCameraPermissionsAsync();
+    if (!permission.granted) {
+      Alert.alert("Permission Denied", "Camera access is required.");
+      return;
+    }
+
+    const result = await ImagePicker.launchCameraAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Videos,
+      allowsEditing: false,
+      quality: 1,
+    });
+
+    if (!result.canceled) {
+      const video = result.assets[0];
+      askToSend(video);
+    }
+  };
+
+  // ✅ Pick image or video from gallery
+  const pickMedia = async () => {
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permission.granted) {
+      Alert.alert("Permission Denied", "Media access is required.");
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.All,
+      allowsEditing: false,
+      quality: 1,
+    });
+
+    if (!result.canceled) {
+      const file = result.assets[0];
+      askToSend(file);
+    }
+  };
+
+  // ✅ Ask to send to rescuer
+  const askToSend = (file) => {
+    Alert.alert(
+      "Send to Rescuer?",
+      `Would you like to send this ${file.type === "video" ? "video" : "image"} to the rescuer?`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Send",
+          onPress: () => {
+            console.log("Sending file:", file.uri);
+            Alert.alert("Success", "Media sent to rescuer!");
+          },
+        },
+      ]
+    );
+  };
+
+  // ✅ Theme styles
   const themeStyles = {
-    container: {
-      backgroundColor: isDarkMode ? "#121212" : "#fff",
-    },
-    card: {
-      backgroundColor: isDarkMode ? "#1E1E1E" : "#f8f8f8",
-    },
-    text: {
-      color: isDarkMode ? "#fff" : "#333",
-    },
-    menuContainer: {
-      backgroundColor: isDarkMode ? "#1E1E1E" : "#fff",
-    },
-    menuText: {
-      color: isDarkMode ? "#fff" : "#333",
-    },
+    container: { backgroundColor: isDarkMode ? "#121212" : "#fff" },
+    card: { backgroundColor: isDarkMode ? "#1E1E1E" : "#f8f8f8" },
+    text: { color: isDarkMode ? "#fff" : "#333" },
+    menuContainer: { backgroundColor: isDarkMode ? "#1E1E1E" : "#fff" },
+    menuText: { color: isDarkMode ? "#fff" : "#333" },
   };
 
   return (
-    <SafeAreaView
-      style={[styles.safeArea, { backgroundColor: "#A83232" }]}
-    >
+    <SafeAreaView style={[styles.safeArea, { backgroundColor: "#A83232" }]}>
       <View style={[styles.container, themeStyles.container]}>
         {/* Header */}
         <View style={styles.header}>
@@ -79,16 +136,25 @@ const DashboardScreen = ({ navigation }) => {
 
           <Text style={styles.headerTitle}>Safe Ka Fernandino!</Text>
 
-          <TouchableOpacity
-            onPress={() => navigation.navigate("UserPageScreen")}
-          >
-            <Icon name="account-circle" size={30} color="#fff" />
-          </TouchableOpacity>
+          <View style={styles.headerRight}>
+            <TouchableOpacity onPress={toggleTheme} style={{ marginRight: 10 }}>
+              <Ionicons
+                name={isDarkMode ? "sunny-outline" : "moon-outline"}
+                size={24}
+                color="#fff"
+              />
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              onPress={() => navigation.navigate("UserPageScreen")}
+            >
+              <Icon name="account-circle" size={30} color="#fff" />
+            </TouchableOpacity>
+          </View>
         </View>
 
         {/* Dashboard Buttons */}
         <View style={styles.grid}>
-          {/* Police */}
           <TouchableOpacity
             style={[styles.card, themeStyles.card]}
             onPress={() => handleEmergencyCall("Police", POLICE_NUMBER)}
@@ -97,7 +163,6 @@ const DashboardScreen = ({ navigation }) => {
             <Text style={[styles.label, themeStyles.text]}>Police</Text>
           </TouchableOpacity>
 
-          {/* Hospital */}
           <TouchableOpacity
             style={[styles.card, themeStyles.card]}
             onPress={() => handleEmergencyCall("Hospital", HOSPITAL_NUMBER)}
@@ -106,24 +171,19 @@ const DashboardScreen = ({ navigation }) => {
             <Text style={[styles.label, themeStyles.text]}>Hospital</Text>
           </TouchableOpacity>
 
-          {/* Fire Station */}
           <TouchableOpacity
             style={[styles.card, themeStyles.card]}
-            onPress={() =>
-              handleEmergencyCall("Fire Station", FIRESTATION_NUMBER)
-            }
+            onPress={() => handleEmergencyCall("Fire Station", FIRESTATION_NUMBER)}
           >
             <Image source={icons.firestation} style={styles.icon} />
             <Text style={[styles.label, themeStyles.text]}>Fire Station</Text>
           </TouchableOpacity>
 
-          {/* Shortcuts */}
           <TouchableOpacity style={[styles.card, themeStyles.card]}>
             <Image source={icons.shortcuts} style={styles.icon} />
             <Text style={[styles.label, themeStyles.text]}>Shortcuts</Text>
           </TouchableOpacity>
 
-          {/* Set-Up */}
           <TouchableOpacity
             style={[styles.card, themeStyles.card]}
             onPress={() => navigation.navigate("Setup")}
@@ -132,23 +192,44 @@ const DashboardScreen = ({ navigation }) => {
             <Text style={[styles.label, themeStyles.text]}>Set-Up</Text>
           </TouchableOpacity>
 
-          {/* Nearby Rescuer */}
-          <TouchableOpacity style={[styles.card, themeStyles.card]}>
-            <Image source={icons.nearby} style={styles.icon} />
-            <Text style={[styles.label, themeStyles.text]}>Nearby Rescuer</Text>
-          </TouchableOpacity>
+          <TouchableOpacity
+  style={[styles.card, themeStyles.card]}
+  onPress={() =>
+    Alert.alert("Select Rescuer Type", "Who do you need?", [
+      {
+        text: "Police",
+        onPress: () => navigation.navigate("NearbyRescuerScreen", { type: "Police" }),
+      },
+      {
+        text: "Fire Station",
+        onPress: () => navigation.navigate("NearbyRescuerScreen", { type: "Fire Station" }),
+      },
+      {
+        text: "Hospital",
+        onPress: () => navigation.navigate("NearbyRescuerScreen", { type: "Hospital" }),
+      },
+      { text: "Cancel", style: "cancel" },
+    ])
+  }
+>
+  <Image source={icons.nearby} style={styles.icon} />
+  <Text style={[styles.label, themeStyles.text]}>Nearby Rescuer</Text>
+</TouchableOpacity>
 
-          {/* Record Video */}
+
+
+
+          {/* ✅ Only one Record Video button now */}
           <TouchableOpacity
             style={[styles.card, themeStyles.card]}
-            onPress={() => navigation.navigate("RecordVideoScreen")}
+            onPress={handleRecordVideoChoice}
           >
-            <Image source={icons.record} style={styles.icon} />
+            <Image source={icons.album} style={styles.icon} />
             <Text style={[styles.label, themeStyles.text]}>Record Video</Text>
           </TouchableOpacity>
         </View>
 
-        {/* Slide Menu Modal */}
+        {/* Slide Menu */}
         <Modal
           animationType="slide"
           transparent={true}
@@ -209,7 +290,6 @@ const DashboardScreen = ({ navigation }) => {
                 </Text>
               </TouchableOpacity>
 
-              {/* Footer options */}
               <View style={styles.menuFooter}>
                 <TouchableOpacity
                   style={styles.menuButton}
@@ -252,15 +332,9 @@ const DashboardScreen = ({ navigation }) => {
   );
 };
 
-// Styles
 const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: "#A83232",
-  },
-  container: {
-    flex: 1,
-  },
+  safeArea: { flex: 1, backgroundColor: "#A83232" },
+  container: { flex: 1 },
   header: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -270,13 +344,12 @@ const styles = StyleSheet.create({
     backgroundColor: "#A83232",
     paddingTop: Platform.OS === "android" ? StatusBar.currentHeight : 0,
   },
+  headerRight: { flexDirection: "row", alignItems: "center" },
   headerTitle: {
     fontSize: 20,
     fontWeight: "bold",
     color: "#fff",
-    flexShrink: 1,
     textAlign: "center",
-    marginHorizontal: 10,
   },
   grid: {
     flexDirection: "row",
@@ -302,31 +375,16 @@ const styles = StyleSheet.create({
     resizeMode: "contain",
     marginBottom: 8,
   },
-  label: {
-    fontSize: 15,
-    fontWeight: "bold",
-    textAlign: "center",
-  },
+  label: { fontSize: 15, fontWeight: "bold", textAlign: "center" },
   modalOverlay: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.5)",
     justifyContent: "flex-start",
   },
-  menuContainer: {
-    paddingVertical: 20,
-    paddingHorizontal: 15,
-  },
-  menuItem: {
-    paddingVertical: 12,
-  },
-  menuText: {
-    fontSize: 18,
-  },
-  menuFooter: {
-    borderTopWidth: 1,
-    borderTopColor: "#ccc",
-    marginTop: 20,
-  },
+  menuContainer: { paddingVertical: 20, paddingHorizontal: 15 },
+  menuItem: { paddingVertical: 12 },
+  menuText: { fontSize: 18 },
+  menuFooter: { borderTopWidth: 1, borderTopColor: "#ccc", marginTop: 20 },
 });
 
 export default DashboardScreen;

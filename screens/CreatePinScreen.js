@@ -10,25 +10,24 @@ import {
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { ThemeContext } from "../ThemeContext";
 
-export default function ParentalSetupScreen({ navigation }) {
+export default function CreatePinScreen({ navigation }) {
   const [pin, setPin] = useState("");
+  const [confirmPin, setConfirmPin] = useState("");
   const { theme } = useContext(ThemeContext);
 
-  const handleEnterPin = async () => {
-    try {
-      const savedPin = await AsyncStorage.getItem("parentPin");
-      if (!savedPin) {
-        Alert.alert("No PIN found", "Please create a new PIN first.");
-        return;
-      }
-      if (pin === savedPin) {
-        navigation.navigate("ParentPageScreen");
-      } else {
-        Alert.alert("Incorrect PIN", "Please try again.");
-      }
-    } catch (err) {
-      console.error(err);
+  const handleCreatePin = async () => {
+    if (pin.length !== 4 || confirmPin.length !== 4) {
+      Alert.alert("Error", "PIN must be 4 digits.");
+      return;
     }
+    if (pin !== confirmPin) {
+      Alert.alert("Error", "PINs do not match.");
+      return;
+    }
+
+    await AsyncStorage.setItem("parentPin", pin);
+    Alert.alert("Success", "PIN created successfully!");
+    navigation.navigate("ParentalSetupScreen");
   };
 
   return (
@@ -44,25 +43,39 @@ export default function ParentalSetupScreen({ navigation }) {
           { color: theme === "dark" ? "#fff" : "#A83232" },
         ]}
       >
-        👨‍👩‍👧 Parental Access
+        🔒 Create New PIN
       </Text>
 
       <TextInput
         style={[
           styles.input,
           {
-            backgroundColor: theme === "dark" ? "#1E1E1E" : "#fff",
-            color: theme === "dark" ? "#fff" : "#000",
             borderColor: theme === "dark" ? "#BB86FC" : "#A83232",
+            color: theme === "dark" ? "#fff" : "#000",
           },
         ]}
         placeholder="Enter 4-digit PIN"
         keyboardType="numeric"
         secureTextEntry
         maxLength={4}
-        placeholderTextColor={theme === "dark" ? "#888" : "#999"}
         value={pin}
         onChangeText={setPin}
+      />
+
+      <TextInput
+        style={[
+          styles.input,
+          {
+            borderColor: theme === "dark" ? "#BB86FC" : "#A83232",
+            color: theme === "dark" ? "#fff" : "#000",
+          },
+        ]}
+        placeholder="Confirm PIN"
+        keyboardType="numeric"
+        secureTextEntry
+        maxLength={4}
+        value={confirmPin}
+        onChangeText={setConfirmPin}
       />
 
       <TouchableOpacity
@@ -70,25 +83,9 @@ export default function ParentalSetupScreen({ navigation }) {
           styles.button,
           { backgroundColor: theme === "dark" ? "#BB86FC" : "#A83232" },
         ]}
-        onPress={handleEnterPin}
+        onPress={handleCreatePin}
       >
-        <Text style={styles.buttonText}>Enter</Text>
-      </TouchableOpacity>
-
-      <TouchableOpacity
-        style={styles.linkButton}
-        onPress={() => navigation.navigate("CreatePinScreen")}
-      >
-        <Text style={styles.linkText}>Create PIN</Text>
-      </TouchableOpacity>
-
-      <TouchableOpacity
-        style={styles.linkButton}
-        onPress={() =>
-          Alert.alert("Forgot PIN", "Please contact admin to reset your PIN.")
-        }
-      >
-        <Text style={styles.linkText}>Forgot PIN?</Text>
+        <Text style={styles.buttonText}>Save PIN</Text>
       </TouchableOpacity>
     </View>
   );
@@ -113,6 +110,4 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   buttonText: { color: "#fff", fontSize: 18, fontWeight: "bold" },
-  linkButton: { marginTop: 15 },
-  linkText: { color: "#007AFF", fontSize: 16 },
 });

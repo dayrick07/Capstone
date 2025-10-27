@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useContext } from "react";
 import {
   View,
   Text,
@@ -6,10 +6,12 @@ import {
   StyleSheet,
   FlatList,
   Linking,
+  Alert,
 } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Accelerometer } from "expo-sensors";
 import Svg, { Circle } from "react-native-svg";
+import { ThemeContext } from "../ThemeContext"; // ✅ Make sure this path is correct
 
 const gestures = ["Swipe Up", "Swipe Down", "Swipe Left", "Swipe Right", "Shake"];
 const actions = ["Call Police", "Call Ambulance", "Call Firefighters"];
@@ -24,14 +26,15 @@ const STROKE_WIDTH = 6;
 const RADIUS = (CIRCLE_SIZE - STROKE_WIDTH) / 2;
 const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
 
-const PhysicalGestureSetupScreen = () => {
+const PhysicalGestureSetupScreen = ({ navigation }) => {
   const [selectedGesture, setSelectedGesture] = useState(null);
   const [selectedAction, setSelectedAction] = useState(null);
   const [savedGestures, setSavedGestures] = useState([]);
   const [countdown, setCountdown] = useState(0);
   const [progress, setProgress] = useState(0);
-
   const countdownRef = useRef(null);
+
+  const { isDarkMode } = useContext(ThemeContext); // ✅ Same as VoiceSetupScreen
 
   useEffect(() => {
     const loadGestures = async () => {
@@ -43,16 +46,17 @@ const PhysicalGestureSetupScreen = () => {
 
   const saveGesture = async () => {
     if (!selectedGesture || !selectedAction) {
-      alert("Select both gesture and action!");
+      Alert.alert("Missing Info", "Please select both a gesture and an action.");
       return;
     }
+
     const newEntry = { gesture: selectedGesture, action: selectedAction };
-    const updatedGestures = [...savedGestures, newEntry];
-    await AsyncStorage.setItem("gestures", JSON.stringify(updatedGestures));
-    setSavedGestures(updatedGestures);
-    alert("Gesture saved!");
+    const updated = [...savedGestures, newEntry];
+    await AsyncStorage.setItem("gestures", JSON.stringify(updated));
+    setSavedGestures(updated);
     setSelectedGesture(null);
     setSelectedAction(null);
+    Alert.alert("Saved", "Gesture successfully saved!");
   };
 
   const startCountdown = (entry) => {
@@ -67,9 +71,7 @@ const PhysicalGestureSetupScreen = () => {
         if (prev <= 0.1) {
           clearInterval(countdownRef.current);
           const number = numbers[entry.action];
-          if (number) {
-            Linking.openURL(number);
-          }
+          if (number) Linking.openURL(number);
           return 0;
         }
         if (secondsPassed % 1 < 0.1) return prev - 1;
@@ -80,19 +82,18 @@ const PhysicalGestureSetupScreen = () => {
 
   const handleAccelerometerData = (data) => {
     const { x, y, z } = data;
-    let detectedGesture = null;
+    let detected = null;
 
-    if (Math.abs(x) > 1.5 || Math.abs(y) > 1.5 || Math.abs(z) > 1.5) detectedGesture = "Shake";
-    else if (y < -0.7) detectedGesture = "Swipe Up";
-    else if (y > 0.7) detectedGesture = "Swipe Down";
-    else if (x < -0.7) detectedGesture = "Swipe Left";
-    else if (x > 0.7) detectedGesture = "Swipe Right";
+    if (Math.abs(x) > 1.5 || Math.abs(y) > 1.5 || Math.abs(z) > 1.5)
+      detected = "Shake";
+    else if (y < -0.7) detected = "Swipe Up";
+    else if (y > 0.7) detected = "Swipe Down";
+    else if (x < -0.7) detected = "Swipe Left";
+    else if (x > 0.7) detected = "Swipe Right";
 
-    if (detectedGesture) {
-      const entry = savedGestures.find((e) => e.gesture === detectedGesture);
-      if (entry && countdown === 0) {
-        startCountdown(entry);
-      }
+    if (detected) {
+      const match = savedGestures.find((e) => e.gesture === detected);
+      if (match && countdown === 0) startCountdown(match);
     }
   };
 
@@ -102,58 +103,116 @@ const PhysicalGestureSetupScreen = () => {
     return () => subscription && subscription.remove();
   }, [savedGestures, countdown]);
 
-  const renderSavedItem = ({ item }) => (
-    <View style={styles.savedItem}>
-      <Text style={styles.savedText}>
+  const renderSaved = ({ item }) => (
+    <View
+      style={[
+        styles.savedItem,
+        { backgroundColor: isDarkMode ? "#2C2C2C" : "#fff" },
+      ]}
+    >
+      <Text
+        style={[
+          styles.savedText,
+          { color: isDarkMode ? "#fff" : "#A83232" },
+        ]}
+      >
         {item.gesture} → {item.action}
       </Text>
     </View>
   );
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>Select a Gesture</Text>
-      <View style={styles.optionsContainer}>
+    <View
+      style={[
+        styles.container,
+        { backgroundColor: isDarkMode ? "#121212" : "#fff" },
+      ]}
+    >
+      <Text
+        style={[
+          styles.title,
+          { color: isDarkMode ? "#fff" : "#A83232" },
+        ]}
+      >
+        Physical Gesture Setup
+      </Text>
+
+      <Text style={[styles.sectionTitle, { color: isDarkMode ? "#fff" : "#A83232" }]}>
+        Select a Gesture
+      </Text>
+      <View style={styles.optionsRow}>
         {gestures.map((g) => (
           <TouchableOpacity
             key={g}
-            style={[styles.optionButton, selectedGesture === g && styles.selectedOption]}
+            style={[
+              styles.optionButton,
+              {
+                backgroundColor:
+                  selectedGesture === g
+                    ? isDarkMode
+                      ? "#555"
+                      : "#ffb3b3"
+                    : isDarkMode
+                    ? "#333"
+                    : "#f0f0f0",
+              },
+            ]}
             onPress={() => setSelectedGesture(g)}
           >
-            <Text style={styles.optionText}>{g}</Text>
+            <Text style={{ color: isDarkMode ? "#fff" : "#000" }}>{g}</Text>
           </TouchableOpacity>
         ))}
       </View>
 
-      <Text style={styles.title}>Assign an Action</Text>
-      <View style={styles.optionsContainer}>
+      <Text style={[styles.sectionTitle, { color: isDarkMode ? "#fff" : "#A83232" }]}>
+        Assign an Action
+      </Text>
+      <View style={styles.optionsRow}>
         {actions.map((a) => (
           <TouchableOpacity
             key={a}
-            style={[styles.optionButton, selectedAction === a && styles.selectedOption]}
+            style={[
+              styles.optionButton,
+              {
+                backgroundColor:
+                  selectedAction === a
+                    ? isDarkMode
+                      ? "#555"
+                      : "#ffb3b3"
+                    : isDarkMode
+                    ? "#333"
+                    : "#f0f0f0",
+              },
+            ]}
             onPress={() => setSelectedAction(a)}
           >
-            <Text style={styles.optionText}>{a}</Text>
+            <Text style={{ color: isDarkMode ? "#fff" : "#000" }}>{a}</Text>
           </TouchableOpacity>
         ))}
       </View>
 
-      <TouchableOpacity style={styles.saveButton} onPress={saveGesture}>
-        <Text style={styles.saveText}>Save Gesture</Text>
+      <TouchableOpacity
+        style={[
+          styles.saveButton,
+          { backgroundColor: isDarkMode ? "#333" : "#A83232" },
+        ]}
+        onPress={saveGesture}
+      >
+        <Text style={{ color: "#fff", fontWeight: "bold" }}>Save Gesture</Text>
       </TouchableOpacity>
 
       {countdown > 0 && (
         <View style={styles.countdownContainer}>
           <Svg width={CIRCLE_SIZE} height={CIRCLE_SIZE}>
             <Circle
-              stroke="#e6e6e6"
+              stroke={isDarkMode ? "#444" : "#ccc"}
               cx={CIRCLE_SIZE / 2}
               cy={CIRCLE_SIZE / 2}
               r={RADIUS}
               strokeWidth={STROKE_WIDTH}
             />
             <Circle
-              stroke="#A83232"
+              stroke={isDarkMode ? "#ff5c5c" : "#A83232"}
               cx={CIRCLE_SIZE / 2}
               cy={CIRCLE_SIZE / 2}
               r={RADIUS}
@@ -163,47 +222,61 @@ const PhysicalGestureSetupScreen = () => {
               strokeLinecap="round"
             />
           </Svg>
-          <Text style={styles.countdownText}>{countdown}</Text>
+          <Text
+            style={{
+              position: "absolute",
+              fontSize: 22,
+              fontWeight: "bold",
+              color: isDarkMode ? "#ff5c5c" : "#A83232",
+            }}
+          >
+            {countdown}
+          </Text>
         </View>
       )}
 
-      <Text style={styles.title}>Saved Gestures</Text>
+      <Text style={[styles.sectionTitle, { color: isDarkMode ? "#fff" : "#A83232" }]}>
+        Saved Gestures
+      </Text>
       <FlatList
         data={savedGestures}
-        keyExtractor={(_, index) => index.toString()}
-        renderItem={renderSavedItem}
+        keyExtractor={(_, i) => i.toString()}
+        renderItem={renderSaved}
       />
+
+      <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
+        <Text style={{ color: isDarkMode ? "#fff" : "#A83232", fontSize: 16 }}>⬅ Back</Text>
+      </TouchableOpacity>
     </View>
   );
 };
 
+export default PhysicalGestureSetupScreen;
+
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 20, backgroundColor: "#fff" },
-  title: { fontSize: 18, fontWeight: "bold", marginVertical: 10 },
-  optionsContainer: { flexDirection: "row", flexWrap: "wrap", marginBottom: 15 },
+  container: { flex: 1, padding: 20 },
+  title: { fontSize: 24, fontWeight: "bold", textAlign: "center", marginBottom: 20 },
+  sectionTitle: { fontSize: 18, fontWeight: "bold", marginBottom: 10 },
+  optionsRow: { flexDirection: "row", flexWrap: "wrap", marginBottom: 15 },
   optionButton: {
-    backgroundColor: "#f0f0f0",
     padding: 12,
-    margin: 5,
     borderRadius: 10,
+    margin: 5,
+    minWidth: "40%",
+    alignItems: "center",
   },
-  selectedOption: { backgroundColor: "#A83232" },
-  optionText: { color: "#000" },
   saveButton: {
-    backgroundColor: "#A83232",
     padding: 15,
     borderRadius: 10,
     alignItems: "center",
     marginBottom: 20,
   },
-  saveText: { color: "#fff", fontWeight: "bold" },
   savedItem: {
-    backgroundColor: "#f8f8f8",
     padding: 12,
     borderRadius: 10,
     marginVertical: 4,
   },
-  savedText: { color: "#000", fontWeight: "bold" },
+  savedText: { fontWeight: "bold" },
   countdownContainer: {
     width: CIRCLE_SIZE,
     height: CIRCLE_SIZE,
@@ -212,12 +285,5 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
-  countdownText: {
-    position: "absolute",
-    fontSize: 22,
-    fontWeight: "bold",
-    color: "#A83232",
-  },
+  backButton: { alignItems: "center", marginTop: 10 },
 });
-
-export default PhysicalGestureSetupScreen;

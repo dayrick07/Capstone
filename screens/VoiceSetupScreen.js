@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useContext } from "react";
 import { 
   View, 
   Text, 
@@ -9,6 +9,7 @@ import {
 } from "react-native";
 import { Audio } from "expo-av";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { ThemeContext } from "../ThemeContext"; // ✅ Import theme context
 
 const emergencyOptions = ["Call Police", "Call Ambulance", "Call Firefighters"];
 
@@ -21,6 +22,8 @@ const VoiceSetupScreen = ({ navigation }) => {
   const [currentPlayingIndex, setCurrentPlayingIndex] = useState(null);
   const playbackRef = useRef(null);
   const playbackInterval = useRef(null);
+
+  const { isDarkMode } = useContext(ThemeContext); // ✅ Get theme state
 
   useEffect(() => {
     loadRecordings();
@@ -143,39 +146,73 @@ const VoiceSetupScreen = ({ navigation }) => {
   };
 
   const renderItem = ({ item, index }) => (
-    <View style={styles.recordItem}>
-      <Text style={styles.recordLabel}>
+    <View style={[styles.recordItem, { backgroundColor: isDarkMode ? "#2C2C2C" : "#fff" }]}>
+      <Text style={[styles.recordLabel, { color: isDarkMode ? "#fff" : "#A83232" }]}>
         {item.emergencyType} - {new Date(item.createdAt).toLocaleString()}
         {currentPlayingIndex === index ? ` (${playbackTimer}s)` : ""}
       </Text>
       <View style={styles.recordActions}>
-        <TouchableOpacity style={styles.playButton} onPress={() => playRecording(item.uri, index)}>
-          <Text style={styles.playText}>{currentPlayingIndex === index ? "Playing" : "Play"}</Text>
+        <TouchableOpacity
+          style={[
+            styles.playButton,
+            { backgroundColor: isDarkMode ? "#555" : "#A83232" },
+          ]}
+          onPress={() => playRecording(item.uri, index)}
+        >
+          <Text style={styles.playText}>
+            {currentPlayingIndex === index ? "Playing" : "Play"}
+          </Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.deleteButton} onPress={() => deleteRecording(index)}>
+        <TouchableOpacity
+          style={[
+            styles.deleteButton,
+            { backgroundColor: isDarkMode ? "#aa0000" : "red" },
+          ]}
+          onPress={() => deleteRecording(index)}
+        >
           <Text style={styles.deleteText}>Delete</Text>
         </TouchableOpacity>
       </View>
     </View>
   );
 
-  return (
-    <View style={styles.container}>
-      <Text style={styles.title}>Voice Setup</Text>
+  // ✅ Themed background
+  const themeContainer = {
+    backgroundColor: isDarkMode ? "#121212" : "#A83232",
+  };
+  const themeText = { color: isDarkMode ? "#fff" : "#A83232" };
 
-      <TouchableOpacity style={styles.recordButton} onPress={recording ? stopRecording : startRecording}>
-        <Text style={styles.recordText}>
+  return (
+    <View style={[styles.container, themeContainer]}>
+      <Text style={[styles.title, { color: isDarkMode ? "#fff" : "#fff" }]}>Voice Setup</Text>
+
+      <TouchableOpacity
+        style={[
+          styles.recordButton,
+          { backgroundColor: isDarkMode ? "#333" : "#fff" },
+        ]}
+        onPress={recording ? stopRecording : startRecording}
+      >
+        <Text style={[styles.recordText, themeText]}>
           {recording ? `Stop Recording (${recordTimer}s)` : "Record Voice Command"}
         </Text>
       </TouchableOpacity>
 
       {recordedUri && (
-        <TouchableOpacity style={styles.saveButton} onPress={saveRecording}>
-          <Text style={styles.saveText}>Save Recording</Text>
+        <TouchableOpacity
+          style={[
+            styles.saveButton,
+            { backgroundColor: isDarkMode ? "#333" : "#fff" },
+          ]}
+          onPress={saveRecording}
+        >
+          <Text style={[styles.saveText, themeText]}>Save Recording</Text>
         </TouchableOpacity>
       )}
 
-      <Text style={styles.listTitle}>Saved Recordings</Text>
+      <Text style={[styles.listTitle, { color: isDarkMode ? "#fff" : "#fff" }]}>
+        Saved Recordings
+      </Text>
       <FlatList
         data={recordingsList}
         keyExtractor={(item, index) => index.toString()}
@@ -184,7 +221,7 @@ const VoiceSetupScreen = ({ navigation }) => {
       />
 
       <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
-        <Text style={styles.backText}>⬅ Back</Text>
+        <Text style={[styles.backText, { color: isDarkMode ? "#fff" : "#fff" }]}>⬅ Back</Text>
       </TouchableOpacity>
     </View>
   );
@@ -193,21 +230,57 @@ const VoiceSetupScreen = ({ navigation }) => {
 export default VoiceSetupScreen;
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#A83232", padding: 20 },
-  title: { fontSize: 24, fontWeight: "bold", color: "#fff", textAlign: "center", marginBottom: 20 },
-  recordButton: { backgroundColor: "#fff", padding: 15, borderRadius: 10, marginBottom: 10, alignItems: "center" },
-  recordText: { color: "#A83232", fontWeight: "bold", textAlign: "center" },
-  saveButton: { backgroundColor: "#fff", padding: 15, borderRadius: 10, marginBottom: 20, alignItems: "center" },
-  saveText: { color: "#A83232", fontWeight: "bold", textAlign: "center" },
-  listTitle: { color: "#fff", fontSize: 18, marginBottom: 10, textAlign: "center" },
+  container: { flex: 1, padding: 20 },
+  title: {
+    fontSize: 24,
+    fontWeight: "bold",
+    textAlign: "center",
+    marginBottom: 20,
+  },
+  recordButton: {
+    padding: 15,
+    borderRadius: 10,
+    marginBottom: 10,
+    alignItems: "center",
+  },
+  recordText: {
+    fontWeight: "bold",
+    textAlign: "center",
+  },
+  saveButton: {
+    padding: 15,
+    borderRadius: 10,
+    marginBottom: 20,
+    alignItems: "center",
+  },
+  saveText: {
+    fontWeight: "bold",
+    textAlign: "center",
+  },
+  listTitle: {
+    fontSize: 18,
+    marginBottom: 10,
+    textAlign: "center",
+  },
   list: { maxHeight: 300, marginBottom: 20 },
-  recordItem: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", backgroundColor: "#fff", padding: 10, borderRadius: 10, marginBottom: 5 },
-  recordLabel: { color: "#A83232", fontWeight: "bold", flex: 1 },
+  recordItem: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    padding: 10,
+    borderRadius: 10,
+    marginBottom: 5,
+  },
+  recordLabel: { fontWeight: "bold", flex: 1 },
   recordActions: { flexDirection: "row" },
-  playButton: { backgroundColor: "#A83232", padding: 5, borderRadius: 5, marginRight: 5 },
+  playButton: {
+    padding: 5,
+    borderRadius: 5,
+    marginRight: 5,
+  },
   playText: { color: "#fff" },
-  deleteButton: { backgroundColor: "red", padding: 5, borderRadius: 5 },
+  deleteButton: { padding: 5, borderRadius: 5 },
   deleteText: { color: "#fff" },
   backButton: { alignItems: "center", marginTop: 10 },
-  backText: { color: "#fff", fontSize: 16 }
+  backText: { fontSize: 16 },
 });

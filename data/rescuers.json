@@ -1,0 +1,74 @@
+[
+  {
+    "id": 1,
+    "name": "San Fernando Police Station 1",
+    "type": "Police",
+    "phone": "045-961-1234",
+    "latitude": 15.0330,
+    "longitude": 120.6540
+  },
+  {
+    "id": 2,
+    "name": "San Fernando Police Station 2",
+    "type": "Police",
+    "phone": "045-961-2345",
+    "latitude": 15.0340,
+    "longitude": 120.6525
+  },
+  {
+    "id": 3,
+    "name": "San Fernando Police Substation",
+    "type": "Police",
+    "phone": "045-961-3456",
+    "latitude": 15.0320,
+    "longitude": 120.6555
+  },
+  {
+    "id": 4,
+    "name": "San Fernando Fire Station 1",
+    "type": "Fire Station",
+    "phone": "045-961-5678",
+    "latitude": 15.0345,
+    "longitude": 120.6545
+  },
+  {
+    "id": 5,
+    "name": "San Fernando Fire Station 2",
+    "type": "Fire Station",
+    "phone": "045-961-6789",
+    "latitude": 15.0355,
+    "longitude": 120.6530
+  },
+  {
+    "id": 6,
+    "name": "San Fernando Fire Substation",
+    "type": "Fire Station",
+    "phone": "045-961-7890",
+    "latitude": 15.0335,
+    "longitude": 120.6550
+  },
+  {
+    "id": 7,
+    "name": "Jose B. Lingad Memorial Regional Hospital",
+    "type": "Hospital",
+    "phone": "045-961-8901",
+    "latitude": 15.0325,
+    "longitude": 120.6535
+  },
+  {
+    "id": 8,
+    "name": "San Fernando Community Hospital",
+    "type": "Hospital",
+    "phone": "045-961-9012",
+    "latitude": 15.0340,
+    "longitude": 120.6520
+  },
+  {
+    "id": 9,
+    "name": "St. Joseph Hospital San Fernando",
+    "type": "Hospital",
+    "phone": "045-961-0123",
+    "latitude": 15.0335,
+    "longitude": 120.6545
+  }
+]

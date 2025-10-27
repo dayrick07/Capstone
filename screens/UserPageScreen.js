@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useContext } from "react";
 import {
   View,
   Text,
@@ -8,11 +8,13 @@ import {
   Image,
   Dimensions,
   Alert,
+  Platform,
+  StatusBar,
 } from "react-native";
 import Icon from "react-native-vector-icons/MaterialIcons";
 import * as ImagePicker from "expo-image-picker";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { StatusBar, Platform } from "react-native";
+import { ThemeContext } from "../ThemeContext"; // ✅ Import Theme Context
 
 const { width } = Dimensions.get("window");
 
@@ -21,14 +23,14 @@ const UserPageScreen = ({ navigation }) => {
     "https://via.placeholder.com/150"
   );
 
-  // 🔹 Load saved profile photo on startup
+  const { isDarkMode, toggleTheme } = useContext(ThemeContext); // ✅ Use theme context
+
+  // Load saved profile image
   useEffect(() => {
     const loadProfileImage = async () => {
       try {
         const savedImage = await AsyncStorage.getItem("profileImage");
-        if (savedImage) {
-          setProfileImage(savedImage);
-        }
+        if (savedImage) setProfileImage(savedImage);
       } catch (error) {
         console.log("Error loading profile image:", error);
       }
@@ -36,7 +38,7 @@ const UserPageScreen = ({ navigation }) => {
     loadProfileImage();
   }, []);
 
-  // 🔹 Save image to AsyncStorage
+  // Save image to AsyncStorage
   const saveProfileImage = async (uri) => {
     try {
       await AsyncStorage.setItem("profileImage", uri);
@@ -67,7 +69,7 @@ const UserPageScreen = ({ navigation }) => {
     }
   };
 
-  // Capture image using camera
+  // Capture image
   const takePhoto = async () => {
     const permissionResult = await ImagePicker.requestCameraPermissionsAsync();
     if (!permissionResult.granted) {
@@ -86,7 +88,6 @@ const UserPageScreen = ({ navigation }) => {
     }
   };
 
-  // Show option
   const handleChangePhoto = () => {
     Alert.alert("Profile Photo", "Choose an option", [
       { text: "Cancel", style: "cancel" },
@@ -95,22 +96,32 @@ const UserPageScreen = ({ navigation }) => {
     ]);
   };
 
+  // ✅ Theme-based styles
+  const themeStyles = {
+    background: { backgroundColor: isDarkMode ? "#121212" : "#fff" },
+    card: { backgroundColor: isDarkMode ? "#1E1E1E" : "#f8f8f8" },
+    text: { color: isDarkMode ? "#fff" : "#333" },
+    label: { color: isDarkMode ? "#ff6666" : "#A83232" },
+  };
+
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={[styles.container, themeStyles.background]}>
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()}>
           <Icon name="arrow-back" size={26} color="#fff" />
         </TouchableOpacity>
-        <Text
-          style={styles.headerTitle}
-          adjustsFontSizeToFit
-          numberOfLines={1}
-          minimumFontScale={0.8}
-        >
-          Profile
-        </Text>
-        <View style={{ width: 26 }} />
+
+        <Text style={styles.headerTitle}>Profile</Text>
+
+        {/* 🌙 / ☀️ Toggle Button */}
+        <TouchableOpacity onPress={toggleTheme}>
+          <Icon
+            name={isDarkMode ? "brightness-7" : "brightness-2"}
+            size={24}
+            color="#fff"
+          />
+        </TouchableOpacity>
       </View>
 
       {/* Profile Picture */}
@@ -124,83 +135,27 @@ const UserPageScreen = ({ navigation }) => {
       </View>
 
       {/* Profile Info */}
-      <View style={styles.infoCard}>
-        <Text
-          style={styles.label}
-          adjustsFontSizeToFit
-          numberOfLines={1}
-          minimumFontScale={0.8}
-        >
-          Username
-        </Text>
-        <Text
-          style={styles.value}
-          adjustsFontSizeToFit
-          numberOfLines={1}
-          minimumFontScale={0.8}
-        >
-          Juan Dela Cruz
-        </Text>
+      <View style={[styles.infoCard, themeStyles.card]}>
+        <Text style={[styles.label, themeStyles.label]}>Username</Text>
+        <Text style={[styles.value, themeStyles.text]}>Juan Dela Cruz</Text>
 
-        <Text
-          style={styles.label}
-          adjustsFontSizeToFit
-          numberOfLines={1}
-          minimumFontScale={0.8}
-        >
-          Email
-        </Text>
-        <Text
-          style={styles.value}
-          adjustsFontSizeToFit
-          numberOfLines={1}
-          minimumFontScale={0.8}
-        >
-          juan@example.com
-        </Text>
+        <Text style={[styles.label, themeStyles.label]}>Email</Text>
+        <Text style={[styles.value, themeStyles.text]}>juan@example.com</Text>
 
-        <Text
-          style={styles.label}
-          adjustsFontSizeToFit
-          numberOfLines={1}
-          minimumFontScale={0.8}
-        >
-          Phone
-        </Text>
-        <Text
-          style={styles.value}
-          adjustsFontSizeToFit
-          numberOfLines={1}
-          minimumFontScale={0.8}
-        >
-          +63 912 345 6789
-        </Text>
+        <Text style={[styles.label, themeStyles.label]}>Phone</Text>
+        <Text style={[styles.value, themeStyles.text]}>+63 912 345 6789</Text>
       </View>
 
       {/* Buttons */}
       <TouchableOpacity style={styles.button}>
-        <Text
-          style={styles.buttonText}
-          adjustsFontSizeToFit
-          numberOfLines={1}
-          minimumFontScale={0.8}
-        >
-          Parent Setup
-        </Text>
+        <Text style={styles.buttonText}>Parent Setup</Text>
       </TouchableOpacity>
 
       <TouchableOpacity
         style={[styles.button, { backgroundColor: "#555" }]}
         onPress={() => navigation.navigate("LoginScreen")}
       >
-        <Text
-          style={styles.buttonText}
-          adjustsFontSizeToFit
-          numberOfLines={1}
-          minimumFontScale={0.8}
-        >
-          Logout
-        </Text>
+        <Text style={styles.buttonText}>Logout</Text>
       </TouchableOpacity>
     </SafeAreaView>
   );
@@ -209,7 +164,7 @@ const UserPageScreen = ({ navigation }) => {
 export default UserPageScreen;
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#fff" },
+  container: { flex: 1 },
   header: {
     flexDirection: "row",
     alignItems: "center",
@@ -242,14 +197,13 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   infoCard: {
-    backgroundColor: "#f8f8f8",
     borderRadius: 10,
     margin: 20,
     padding: 15,
     elevation: 3,
   },
-  label: { fontSize: 14, fontWeight: "bold", color: "#A83232", marginTop: 10 },
-  value: { fontSize: 16, color: "#333", marginTop: 2 },
+  label: { fontSize: 14, fontWeight: "bold", marginTop: 10 },
+  value: { fontSize: 16, marginTop: 2 },
   button: {
     backgroundColor: "#A83232",
     marginHorizontal: 20,

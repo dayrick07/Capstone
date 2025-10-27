@@ -1,75 +1,197 @@
 import React, { useState, useEffect, useRef } from "react";
-import { View, Text, TouchableOpacity, SafeAreaView, StyleSheet, FlatList } from "react-native";
+import {
+  View,
+  Text,
+  TouchableOpacity,
+  StyleSheet,
+  SafeAreaView,
+  Alert,
+  ActivityIndicator,
+} from "react-native";
 import { Camera } from "expo-camera";
-import * as FileSystem from "expo-file-system";
+import * as MediaLibrary from "expo-media-library";
+import { Video } from "expo-av";
 
 export default function RecordVideoScreen({ navigation }) {
   const cameraRef = useRef(null);
-  const [hasPermission, setHasPermission] = useState(null);
+
+  const [hasCameraPermission, setHasCameraPermission] = useState(false);
+  const [hasMediaPermission, setHasMediaPermission] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
   const [isRecording, setIsRecording] = useState(false);
-  const [videos, setVideos] = useState([]);
+  const [recordedVideo, setRecordedVideo] = useState(null);
 
+  // Request permissions
   useEffect(() => {
-    (async () => {
-      const { status } = await Camera.requestCameraPermissionsAsync();
-      setHasPermission(status === "granted");
+    const requestPermissions = async () => {
+      try {
+        // CAMERA permission
+        let cameraStatus = await Camera.getCameraPermissionsAsync();
+        if (!cameraStatus.granted) {
+          cameraStatus = await Camera.requestCameraPermissionsAsync();
+        }
 
-      // Load saved videos from internal storage
-      const files = await FileSystem.readDirectoryAsync(FileSystem.documentDirectory);
-      const savedVideos = files.filter(f => f.endsWith(".mp4")).map(f => FileSystem.documentDirectory + f);
-      setVideos(savedVideos);
-    })();
+        // MEDIA LIBRARY permission
+        let mediaStatus = await MediaLibrary.getPermissionsAsync();
+        if (!mediaStatus.granted) {
+          mediaStatus = await MediaLibrary.requestPermissionsAsync();
+        }
+
+        setHasCameraPermission(cameraStatus.granted);
+        setHasMediaPermission(mediaStatus.granted);
+
+        if (!cameraStatus.granted) {
+          Alert.alert(
+            "Camera Permission",
+            "Camera permission is required to record video."
+          );
+        }
+        if (!mediaStatus.granted) {
+          Alert.alert(
+            "Media Library Permission",
+            "Media Library permission is required to save videos."
+          );
+        }
+      } catch (err) {
+        console.log("Permission Error:", err);
+        Alert.alert("Error", "Failed to get permissions.");
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    requestPermissions();
   }, []);
 
-  if (hasPermission === null) return <Text>Loading...</Text>;
-  if (hasPermission === false) return <Text>No access to camera</Text>;
+  // Loading indicator
+  if (isLoading) return <ActivityIndicator size="large" style={{ flex: 1 }} />;
 
+  if (!hasCameraPermission)
+    return (
+      <View style={styles.centered}>
+        <Text>No access to camera. Please allow permissions.</Text>
+      </View>
+    );
+
+  // Start/Stop recording
   const handleRecord = async () => {
     if (!cameraRef.current) return;
 
     if (!isRecording) {
       setIsRecording(true);
-      const video = await cameraRef.current.recordAsync();
-      const fileName = `${FileSystem.documentDirectory}video_${Date.now()}.mp4`;
-      await FileSystem.moveAsync({ from: video.uri, to: fileName });
-      setVideos(prev => [fileName, ...prev]);
-      setIsRecording(false);
+      try {
+        const video = await cameraRef.current.recordAsync({
+          quality: Camera.Constants.VideoQuality["480p"],
+          maxDuration: 60,
+        });
+        setRecordedVideo(video.uri);
+      } catch (err) {
+        console.log("Recording Error:", err);
+        Alert.alert("Error", "Failed to record video.");
+      } finally {
+        setIsRecording(false);
+      }
     } else {
       cameraRef.current.stopRecording();
     }
   };
 
-  return (
-    <SafeAreaView style={{ flex: 1 }}>
-      <Camera ref={cameraRef} style={{ flex: 1 }} type={Camera.Constants.Type.back}>
-        <View style={styles.controls}>
-          <TouchableOpacity style={styles.button} onPress={handleRecord}>
-            <Text style={{ color: "#fff" }}>{isRecording ? "Stop" : "Record"}</Text>
-          </TouchableOpacity>
+  // Save video
+  const handleSave = async () => {
+    if (!recordedVideo) return;
 
-          <TouchableOpacity
-            style={[styles.button, { backgroundColor: "blue" }]}
-            onPress={() => navigation.navigate("Album", { videos })}
-          >
-            <Text style={{ color: "#fff" }}>Album</Text>
-          </TouchableOpacity>
+    if (!hasMediaPermission) {
+      Alert.alert("Permission Denied", "Cannot save video without permission.");
+      return;
+    }
+
+    try {
+      await MediaLibrary.createAssetAsync(recordedVideo);
+      Alert.alert("Saved", "Video saved to gallery.");
+      setRecordedVideo(null);
+    } catch (err) {
+      console.log("Save Error:", err);
+      Alert.alert("Error", "Failed to save video.");
+    }
+  };
+
+  return (
+    <SafeAreaView style={styles.container}>
+      {recordedVideo ? (
+        <View style={styles.previewContainer}>
+          <Video
+            source={{ uri: recordedVideo }}
+            style={styles.video}
+            useNativeControls
+            resizeMode="contain"
+            shouldPlay
+          />
+          <View style={styles.buttonRow}>
+            <TouchableOpacity style={styles.button} onPress={handleSave}>
+              <Text style={styles.buttonText}>Save</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.button}
+              onPress={() => setRecordedVideo(null)}
+            >
+              <Text style={styles.buttonText}>Retake</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.button}
+              onPress={() => navigation.navigate("Album")}
+            >
+              <Text style={styles.buttonText}>Album</Text>
+            </TouchableOpacity>
+          </View>
         </View>
-      </Camera>
+      ) : (
+        <Camera
+          style={styles.camera}
+          ref={cameraRef}
+          type={Camera.Constants.Type.back}
+        >
+          <View style={styles.recordButtonContainer}>
+            <TouchableOpacity
+              style={[styles.recordButton, isRecording && styles.recording]}
+              onPress={handleRecord}
+            />
+          </View>
+        </Camera>
+      )}
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  controls: {
+  container: { flex: 1, backgroundColor: "#000" },
+  camera: { flex: 1, justifyContent: "flex-end", alignItems: "center" },
+  recordButtonContainer: {
     flexDirection: "row",
+    justifyContent: "center",
+    marginBottom: 20,
+  },
+  recordButton: {
+    width: 70,
+    height: 70,
+    borderRadius: 35,
+    backgroundColor: "red",
+  },
+  recording: { backgroundColor: "darkred" },
+  previewContainer: { flex: 1, justifyContent: "center", alignItems: "center" },
+  video: { width: "100%", height: "70%" },
+  buttonRow: {
+    flexDirection: "row",
+    marginTop: 20,
     justifyContent: "space-around",
-    position: "absolute",
-    bottom: 20,
-    width: "100%",
+    width: "90%",
   },
   button: {
     padding: 15,
-    backgroundColor: "red",
-    borderRadius: 50,
+    backgroundColor: "#A83232",
+    borderRadius: 10,
   },
+  buttonText: { color: "#fff", fontWeight: "bold" },
+  centered: { flex: 1, justifyContent: "center", alignItems: "center" },
 });
