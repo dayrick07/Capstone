@@ -1,12 +1,19 @@
 import React, { useState, useEffect, useContext, useRef } from "react";
-import { View, Text, StyleSheet, Alert, Linking, FlatList, TouchableOpacity } from "react-native";
+import {
+  View,
+  Text,
+  StyleSheet,
+  Alert,
+  Linking,
+  FlatList,
+  TouchableOpacity,
+} from "react-native";
 import MapView, { Marker, Callout } from "react-native-maps";
 import * as Location from "expo-location";
-import * as Contacts from "expo-contacts";
 import { ThemeContext } from "../ThemeContext";
-import rescuersData from "../data/rescuers.json";
+import { SERVER_URL } from "../config";
 
-// Haversine formula
+// Haversine formula to calculate distance
 const getDistanceInKm = (lat1, lon1, lat2, lon2) => {
   const R = 6371;
   const dLat = ((lat2 - lat1) * Math.PI) / 180;
@@ -20,17 +27,16 @@ const getDistanceInKm = (lat1, lon1, lat2, lon2) => {
   return R * c;
 };
 
-const NearbyRescuerScreen = ({ route }) => {
-  const { type } = route.params;
+const NearbyRescuerScreen = () => {
   const { isDarkMode } = useContext(ThemeContext);
-
   const [location, setLocation] = useState(null);
-  const [rescuerList, setRescuerList] = useState([]);
+  const [stations, setStations] = useState([]);
   const [nearestId, setNearestId] = useState(null);
   const mapRef = useRef(null);
 
   useEffect(() => {
     (async () => {
+      // Request location permission
       const { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== "granted") {
         Alert.alert("Permission Denied", "Location access is required.");
@@ -40,22 +46,49 @@ const NearbyRescuerScreen = ({ route }) => {
       const loc = await Location.getCurrentPositionAsync({});
       setLocation(loc.coords);
 
-      const listWithDistance = rescuersData
-        .filter((r) => r.type === type)
-        .map((r) => ({
-          ...r,
-          distance: getDistanceInKm(
-            loc.coords.latitude,
-            loc.coords.longitude,
-            r.latitude,
-            r.longitude
-          ),
-        }))
-        .sort((a, b) => a.distance - b.distance);
+      // Fetch stations safely
+      try {
+        const response = await fetch(`${SERVER_URL}/stations`);
+        const text = await response.text();
+        console.log("Raw backend response:", text);
 
-      if (listWithDistance.length > 0) setNearestId(listWithDistance[0].id);
+        let data;
+        try {
+          data = JSON.parse(text);
+        } catch (jsonErr) {
+          console.error("❌ JSON Parse Error:", jsonErr);
+          Alert.alert(
+            "Error",
+            "Invalid response from server. Please check backend."
+          );
+          return;
+        }
 
-      setRescuerList(listWithDistance);
+        if (data.success && data.stations.length > 0) {
+          const listWithDistance = data.stations
+            .map((s) => ({
+              ...s,
+              distance: getDistanceInKm(
+                loc.coords.latitude,
+                loc.coords.longitude,
+                s.Latitude,
+                s.Longitude
+              ),
+            }))
+            .sort((a, b) => a.distance - b.distance);
+
+          setStations(listWithDistance);
+          setNearestId(listWithDistance[0].Id); // highlight nearest station
+        } else {
+          console.log("No stations found or success=false");
+        }
+      } catch (err) {
+        console.error("❌ Fetch Stations Error:", err);
+        Alert.alert(
+          "Error",
+          "Failed to fetch stations. Check server or network."
+        );
+      }
     })();
   }, []);
 
@@ -66,61 +99,25 @@ const NearbyRescuerScreen = ({ route }) => {
 
   if (!location) {
     return (
-      <View style={[styles.center, { backgroundColor: themeColors.backgroundColor }]}>
+      <View
+        style={[styles.center, { backgroundColor: themeColors.backgroundColor }]}
+      >
         <Text style={{ color: themeColors.textColor }}>Loading map...</Text>
       </View>
     );
   }
 
-  const handleMarkerPress = (rescuer) => {
-    Alert.alert(
-      rescuer.name,
-      `Distance: ${rescuer.distance.toFixed(2)} km\nContact: ${rescuer.phone}`,
-      [
-        { text: "Call", onPress: () => Linking.openURL(`tel:${rescuer.phone}`) },
-        {
-          text: "Get Directions",
-          onPress: () =>
-            Linking.openURL(
-              `https://www.google.com/maps/dir/?api=1&destination=${rescuer.latitude},${rescuer.longitude}`
-            ),
-        },
-        { text: "Close" },
-      ]
-    );
-  };
-
-  const centerMapOnRescuer = (rescuer) => {
+  const centerMapOnStation = (station) => {
     if (mapRef.current) {
       mapRef.current.animateToRegion(
         {
-          latitude: rescuer.latitude,
-          longitude: rescuer.longitude,
+          latitude: station.Latitude,
+          longitude: station.Longitude,
           latitudeDelta: 0.005,
           longitudeDelta: 0.005,
         },
         500
       );
-    }
-  };
-
-  const addContact = async (rescuer) => {
-    const { status } = await Contacts.requestPermissionsAsync();
-    if (status !== "granted") {
-      Alert.alert("Permission Denied", "Cannot access contacts.");
-      return;
-    }
-
-    const contact = {
-      [Contacts.Fields.FirstName]: rescuer.name,
-      [Contacts.Fields.PhoneNumbers]: [{ number: rescuer.phone, label: "mobile" }],
-    };
-
-    try {
-      await Contacts.addContactAsync(contact);
-      Alert.alert("Success", `${rescuer.name} added to contacts`);
-    } catch (error) {
-      Alert.alert("Error", "Failed to add contact");
     }
   };
 
@@ -137,65 +134,61 @@ const NearbyRescuerScreen = ({ route }) => {
         }}
         showsUserLocation
       >
-        {rescuerList.map((rescuer) => (
+        {/* Active user */}
+        <Marker
+          coordinate={{ latitude: location.latitude, longitude: location.longitude }}
+          title="You are here"
+          pinColor="purple"
+        />
+
+        {/* Stations */}
+        {stations.map((station) => (
           <Marker
-            key={rescuer.id}
-            coordinate={{ latitude: rescuer.latitude, longitude: rescuer.longitude }}
-            title={rescuer.name}
-            pinColor={
-              rescuer.id === nearestId
-                ? "gold"
-                : type === "Police"
-                ? "blue"
-                : type === "Fire Station"
-                ? "red"
-                : "green"
-            }
+            key={station.Id}
+            coordinate={{ latitude: station.Latitude, longitude: station.Longitude }}
+            title={station.Name}
+            pinColor={station.Id === nearestId ? "gold" : station.Type === "Police" ? "blue" : "red"}
           >
-            <Callout onPress={() => handleMarkerPress(rescuer)}>
+            <Callout>
               <View>
-                <Text style={{ fontWeight: "bold" }}>{rescuer.name}</Text>
-                <Text>Distance: {rescuer.distance.toFixed(2)} km</Text>
-                {rescuer.id === nearestId && <Text>Nearest!</Text>}
-                <Text>Tap for options</Text>
+                <Text style={{ fontWeight: "bold" }}>{station.Name}</Text>
+                <Text>Distance: {station.distance.toFixed(2)} km</Text>
+                {station.Id === nearestId && <Text>Nearest!</Text>}
+                <Text>Contact: {station.Contact}</Text>
               </View>
             </Callout>
           </Marker>
         ))}
       </MapView>
 
-      {/* Scrollable list below map */}
+      {/* Scrollable list */}
       <FlatList
-        data={rescuerList}
-        keyExtractor={(item) => item.id.toString()}
+        data={stations}
+        keyExtractor={(item) => item.Id.toString()}
         style={styles.list}
         contentContainerStyle={{ padding: 10 }}
         renderItem={({ item }) => (
           <View
             style={[
               styles.card,
-              item.id === nearestId && { borderColor: "gold", borderWidth: 2 },
+              item.Id === nearestId && { borderColor: "gold", borderWidth: 2 },
             ]}
           >
-            <TouchableOpacity onPress={() => centerMapOnRescuer(item)}>
-              <Text style={styles.name}>{item.name}</Text>
+            <TouchableOpacity onPress={() => centerMapOnStation(item)}>
+              <Text style={styles.name}>{item.Name}</Text>
               <Text style={styles.info}>Distance: {item.distance.toFixed(2)} km</Text>
-              <Text style={styles.info}>Phone: {item.phone}</Text>
+              <Text style={styles.info}>Contact: {item.Contact}</Text>
             </TouchableOpacity>
-            <View style={styles.buttons}>
-              <TouchableOpacity
-                style={[styles.button, { backgroundColor: "#32A852" }]}
-                onPress={() => Linking.openURL(`tel:${item.phone}`)}
-              >
-                <Text style={styles.buttonText}>Call</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.button, { backgroundColor: "#3282A8" }]}
-                onPress={() => addContact(item)}
-              >
-                <Text style={styles.buttonText}>Add Contact</Text>
-              </TouchableOpacity>
-            </View>
+            <TouchableOpacity
+              style={[styles.button, { backgroundColor: "#32A852" }]}
+              onPress={() =>
+                Linking.openURL(
+                  `https://www.google.com/maps/dir/?api=1&destination=${item.Latitude},${item.Longitude}`
+                )
+              }
+            >
+              <Text style={styles.buttonText}>Get Directions</Text>
+            </TouchableOpacity>
           </View>
         )}
       />
@@ -221,16 +214,10 @@ const styles = StyleSheet.create({
   },
   name: { fontWeight: "bold", fontSize: 16 },
   info: { fontSize: 14, color: "#555" },
-  buttons: {
-    flexDirection: "row",
-    marginTop: 8,
-    justifyContent: "space-between",
-  },
   button: {
-    flex: 1,
+    marginTop: 8,
     padding: 8,
     borderRadius: 8,
-    marginHorizontal: 5,
     alignItems: "center",
   },
   buttonText: { color: "#fff", fontWeight: "bold" },

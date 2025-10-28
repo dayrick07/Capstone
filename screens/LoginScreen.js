@@ -1,39 +1,102 @@
-
-import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, Image } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
+import React, { useState } from "react";
+import {
+  View,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  StyleSheet,
+  Image,
+  Alert,
+  ActivityIndicator
+} from "react-native";
+import { LinearGradient } from "expo-linear-gradient";
+import axios from "axios";
+import { SERVER_URL } from "../config";
 
 export default function LoginScreen({ navigation }) {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const [role, setRole] = useState("User"); // User or Rescuer
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  const handleLogin = async () => {
+    if (!email || !password) {
+      Alert.alert("Error", "Please enter both email and password");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      // Determine endpoint based on role
+      const endpoint = role === "User" ? "/users/login" : "/rescuers/login";
+
+      const response = await axios.post(`${SERVER_URL}${endpoint}`, { email, password });
+
+      if (response.data.success) {
+        // Get user or rescuer object
+        const user = response.data.user || response.data.rescuer;
+
+        Alert.alert("Login Successful", `Welcome ${user.Name}`);
+
+        if (role === "User") {
+          navigation.replace("DashboardScreen", { userData: user });
+        } else {
+          navigation.replace("RescuerHomeScreen", { rescuerData: user });
+        }
+      } else {
+        Alert.alert("Error", response.data.message || "Login failed");
+      }
+    } catch (error) {
+      console.log(error);
+      Alert.alert("Error", "Unable to connect to server. Make sure your Node.js API is running.");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
-    <LinearGradient
-      colors={['#ee7d7dff', '#ff1a1a']}
-      style={styles.container}
-    >
-      {/* App Title */}
-      <Text style={styles.appTitle}>Safe ka Fernandino!</Text>
-      
-      {/* Logo */}
-      <Image
-        source={require('../assets/logo.png')}
-        style={styles.logo}
-      />
-
-      {/* Location under Logo */}
+    <LinearGradient colors={["#ee7d7dff", "#ff1a1a"]} style={styles.container}>
+      <Image source={require("../assets/logo.png")} style={styles.logo} />
       <Text style={styles.locationText}>Only in San Fernando, Pampanga.</Text>
 
-      {/* Email Input */}
+      {/* Role Selection */}
+      <View style={{ flexDirection: "row", marginBottom: 20 }}>
+        <TouchableOpacity
+          style={{
+            flex: 1,
+            padding: 10,
+            backgroundColor: role === "User" ? "#fff" : "rgba(255,255,255,0.3)",
+            borderRadius: 10,
+            marginRight: 5,
+            alignItems: "center",
+          }}
+          onPress={() => setRole("User")}
+        >
+          <Text style={{ fontWeight: "bold", color: role === "User" ? "#ff1a1a" : "#fff" }}>User Login</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={{
+            flex: 1,
+            padding: 10,
+            backgroundColor: role === "Rescuer" ? "#fff" : "rgba(255,255,255,0.3)",
+            borderRadius: 10,
+            marginLeft: 5,
+            alignItems: "center",
+          }}
+          onPress={() => setRole("Rescuer")}
+        >
+          <Text style={{ fontWeight: "bold", color: role === "Rescuer" ? "#ff1a1a" : "#fff" }}>Rescuer Login</Text>
+        </TouchableOpacity>
+      </View>
+
       <TextInput
         style={styles.input}
         placeholder="Email"
         placeholderTextColor="#fff"
         value={email}
         onChangeText={setEmail}
+        autoCapitalize="none"
       />
-
-      {/* Password Input */}
       <TextInput
         style={styles.input}
         placeholder="Password"
@@ -43,74 +106,38 @@ export default function LoginScreen({ navigation }) {
         onChangeText={setPassword}
       />
 
-     {/* Login Button */}
-      <TouchableOpacity style={styles.loginbutton} onPress={() => navigation.navigate('DashboardScreen')}>
-         <Text style={styles.buttonText}>Login</Text>
-           </TouchableOpacity>
+      <TouchableOpacity style={styles.loginbutton} onPress={handleLogin}>
+        {loading ? <ActivityIndicator size="large" color="#ff1a1a" /> : <Text style={styles.buttonText}>Login</Text>}
+      </TouchableOpacity>
 
-      {/* Bottom Signup Buttons */}
       <View style={styles.bottomButtons}>
-        {/* Signup for Citizens */}
-        <TouchableOpacity 
-          style={styles.signupButton} 
-          onPress={() => navigation.navigate('SignupUserScreen')}
-        >
-          <Text style={styles.signupButtonText}>Bago ka dito? Sign up muna!</Text>
-        </TouchableOpacity>
-
-        {/* Signup for Rescuers */}
-        <TouchableOpacity 
-          style={styles.signupButton} 
-          onPress={() => navigation.navigate('SignupRescuerScreen')}
-        >
-          <Text style={styles.signupButtonText}>Sign up (For Rescuers only)</Text>
-        </TouchableOpacity>
+        {role === "User" ? (
+          <TouchableOpacity onPress={() => navigation.navigate("SignupUserScreen")}>
+            <Text style={styles.signupButtonText}>Bago ka dito? Sign up muna!</Text>
+          </TouchableOpacity>
+        ) : (
+          <TouchableOpacity onPress={() => navigation.navigate("RescuerSignupScreen")}>
+            <Text style={styles.signupButtonText}>Bago ka dito? Sign up as Rescuer!</Text>
+          </TouchableOpacity>
+        )}
       </View>
     </LinearGradient>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    justifyContent: 'flex-start',
-    alignItems: 'center',
-    padding: 20,
-  },
-  appTitle: {
-    fontSize: 30,
-    fontWeight: 'bold',
-    color: '#fff',
-    textShadowColor: 'rgba(0, 0, 0, 0.8)',
-    textShadowOffset: { width: 2, height: 2 },
-    textShadowRadius: 3,
-    marginTop: 40,
-  },
-  logo: {
-    width: 120,
-    height: 120,
-    marginBottom: 10,
-    resizeMode: 'contain',
-  },
-    locationText: {
-    fontSize: 13,
-    fontWeight: 'bold',
-    color: '#fff',
-    marginBottom: 40,
-    textShadowColor: 'rgba(0, 0, 0, 0.6)',
-    textShadowOffset: { width: 1, height: 1 },
-    textShadowRadius: 2,
-  },
+  container: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20 },
+  appTitle: { fontSize: 30, fontWeight: 'bold', color: '#fff' },
+  logo: { width: 120, height: 120, marginBottom: 10 },
+  locationText: { fontSize: 13, color: '#fff', marginBottom: 40 },
   input: {
     width: '100%',
-    height: 55,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    height: 50,
+    backgroundColor: 'rgba(255,255,255,0.2)',
     borderRadius: 10,
     paddingHorizontal: 15,
-    fontSize: 18,
-    fontWeight: 'bold',
     color: '#fff',
-    marginBottom: 20,
+    marginBottom: 15,
   },
   loginbutton: {
     width: '100%',
@@ -121,34 +148,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 25,
   },
-  buttonText: {
-    fontSize: 25,
-    fontWeight: 'bold',
-    color: '#ff1a1a',
-  },
-  bottomButtons: {
-    position: 'absolute',
-    bottom: 30,
-    width: '100%',
-    alignItems: 'center',
-  },
-  signupButton: {
-    width: '90%',
-    height: 50,
-    borderWidth: 2,
-    borderColor: '#fff',
-    borderRadius: 10,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 15,
-  },
-  signupButtonText: {
-    color: '#fff',
-    fontWeight: 'bold',
-    textAlign: 'center',
-    fontSize: 20,
-    textShadowColor: 'rgba(0, 0, 0, 0.8)',
-    textShadowOffset: { width: 1, height: 1 },
-    textShadowRadius: 2,
-  },
+  buttonText: { fontSize: 22, fontWeight: 'bold', color: '#ff1a1a' },
+  bottomButtons: { marginTop: 20 },
+  signupButtonText: { color: '#fff', fontSize: 16 },
 });

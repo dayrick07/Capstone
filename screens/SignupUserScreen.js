@@ -1,93 +1,91 @@
-import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, Image, ScrollView } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
-import { Ionicons } from '@expo/vector-icons';
+import React, { useState } from "react";
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, Alert, Platform } from "react-native";
+import { LinearGradient } from "expo-linear-gradient";
+import axios from "axios";
+import { Picker } from "@react-native-picker/picker";
+import DateTimePicker from "@react-native-community/datetimepicker";
+import { SERVER_URL } from "../config";
 
 export default function SignupUserScreen({ navigation }) {
-  const [gender, setGender] = useState('');
-  const [language, setLanguage] = useState('');
+  const [fullName, setFullName] = useState("");
+  const [address, setAddress] = useState("");
+  const [mobile, setMobile] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [gender, setGender] = useState("");
+  const [language, setLanguage] = useState("");
+  const [birthdate, setBirthdate] = useState(new Date());
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [loading, setLoading] = useState(false);
+
+  const handleRegister = async () => {
+    if (!fullName || !address || !email || !password || !gender || !language || !birthdate) {
+      Alert.alert("Missing Fields", "Please fill in all required fields.");
+      return;
+    }
+
+    setLoading(true);
+    const tempUserData = {
+      name: fullName,
+      email,
+      password,
+      type: "user",
+      gender,
+      mobile,
+      language,
+      birthdate: birthdate.toISOString().split("T")[0],
+      address,
+    };
+
+    try {
+      const otpRes = await axios.post(`${SERVER_URL}/users/send-otp`, { email });
+      if (otpRes.data.success) {
+        navigation.navigate("OTPVerificationScreen", { email, userData: tempUserData, type: "user" });
+      } else {
+        Alert.alert("Error", "Failed to send OTP. Try again.");
+      }
+    } catch (error) {
+      console.error(error);
+      Alert.alert("Error", "Unable to connect to server.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const showDatePickerModal = () => setShowDatePicker(true);
+  const onDateChange = (event, selectedDate) => { setShowDatePicker(Platform.OS === "ios"); if (selectedDate) setBirthdate(selectedDate); };
 
   return (
-    <LinearGradient colors={['#ee7d7dff', '#8B0000']} style={styles.container}>
-      <ScrollView contentContainerStyle={styles.scroll}>
-        
-        {/* Back Button */}
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-          <Ionicons name="arrow-back-circle" size={40} color="black" />
+    <LinearGradient colors={["#ee7d7dff", "#8B0000"]} style={{ flex: 1 }}>
+      <ScrollView contentContainerStyle={{ padding: 20 }}>
+        <Text style={{ fontSize: 28, fontWeight: "bold", color: "#fff", textAlign: "center", marginBottom: 20 }}>Registration</Text>
+        <TextInput style={styles.input} placeholder="Full Name" value={fullName} onChangeText={setFullName} />
+        <TextInput style={styles.input} placeholder="Address" value={address} onChangeText={setAddress} />
+        <TextInput style={styles.input} placeholder="Mobile" value={mobile} onChangeText={setMobile} />
+        <TextInput style={styles.input} placeholder="Email" value={email} onChangeText={setEmail} />
+        <View style={styles.pickerContainer}>
+          <Picker selectedValue={gender} onValueChange={setGender}>
+            <Picker.Item label="Select Gender" value="" />
+            <Picker.Item label="Male" value="Male" />
+            <Picker.Item label="Female" value="Female" />
+            <Picker.Item label="Other" value="Other" />
+          </Picker>
+        </View>
+        <View style={styles.pickerContainer}>
+          <Picker selectedValue={language} onValueChange={setLanguage}>
+            <Picker.Item label="Select Language" value="" />
+            <Picker.Item label="Tagalog" value="Tagalog" />
+            <Picker.Item label="Kapampangan" value="Kapampangan" />
+            <Picker.Item label="English" value="English" />
+          </Picker>
+        </View>
+        <TouchableOpacity style={styles.datePickerButton} onPress={showDatePickerModal}>
+          <Text style={styles.datePickerText}>{birthdate.toDateString()}</Text>
         </TouchableOpacity>
-
-        {/* Title */}
-        <Text style={styles.header}>Registration</Text>
-        <Text style={styles.subheader}>(Only for San Fernando, Pampanga Citizens)</Text>
-
-        {/* Full Name */}
-        <Text style={styles.label}>Full Name</Text>
-        <TextInput style={styles.input} placeholder="Enter full name" placeholderTextColor="#777" />
-
-        {/* Address */}
-        <Text style={styles.label}>Address</Text>
-        <TextInput style={styles.input} placeholder="Enter address" placeholderTextColor="#777" />
-
-        {/* Mobile Number & OTP */}
-        <Text style={styles.label}>Mobile Number</Text>
-        <View style={styles.row}>
-          <TextInput style={[styles.input, { flex: 2 }]} placeholder="Enter number" keyboardType="phone-pad" placeholderTextColor="#777" />
-          <TouchableOpacity style={styles.otpButton}>
-            <Text style={styles.otpText}>Send</Text>
-          </TouchableOpacity>
-          <TextInput style={[styles.input, { flex: 1 }]} placeholder="OTP" placeholderTextColor="#777" />
-        </View>
-
-        {/* Email */}
-        <Text style={styles.label}>Email</Text>
-        <TextInput style={styles.input} placeholder="Enter email" placeholderTextColor="#777" keyboardType="email-address" />
-
-        {/* Gender */}
-        <Text style={styles.label}>Gender:</Text>
-        <View style={styles.row}>
-          <TouchableOpacity style={styles.radio} onPress={() => setGender('Male')}>
-            <Ionicons name={gender === 'Male' ? 'radio-button-on' : 'radio-button-off'} size={20} color="black" />
-            <Text style={styles.radioText}> Male</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.radio} onPress={() => setGender('Female')}>
-            <Ionicons name={gender === 'Female' ? 'radio-button-on' : 'radio-button-off'} size={20} color="black" />
-            <Text style={styles.radioText}> Female</Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Birthdate */}
-        <Text style={styles.label}>Birthdate</Text>
-        <View style={styles.row}>
-          <TextInput style={[styles.input, { flex: 1 }]} placeholder="MM/DD/YYYY" placeholderTextColor="#777" />
-          <Ionicons name="calendar" size={30} color="black" style={{ marginLeft: 10 }} />
-        </View>
-
-        {/* Language */}
-        <View style={styles.row}>
-          {['English', 'Tagalog', 'Kapampangan'].map((lang) => (
-            <TouchableOpacity key={lang} style={styles.radio} onPress={() => setLanguage(lang)}>
-              <Ionicons name={language === lang ? 'radio-button-on' : 'radio-button-off'} size={20} color="black" />
-              <Text style={styles.radioText}> {lang}</Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-
-        {/* Password */}
-        <Text style={styles.label}>Password</Text>
-        <TextInput style={styles.input} placeholder="Enter password" placeholderTextColor="#777" secureTextEntry />
-
-        {/* Upload ID */}
-        <Text style={styles.label}>Upload 1 Government ID</Text>
-        <View style={styles.row}>
-          <Image source={require('../assets/sample_id.png')} style={styles.idImage} />
-          <TouchableOpacity style={styles.uploadBox}>
-            <Ionicons name="add" size={40} color="black" />
-          </TouchableOpacity>
-        </View>
-
-        {/* Register Button */}
-        <TouchableOpacity style={styles.registerButton}>
-          <Text style={styles.registerText}>Register!</Text>
+        {showDatePicker && <DateTimePicker value={birthdate} mode="date" display="default" maximumDate={new Date()} onChange={onDateChange} />}
+        <TextInput style={styles.input} placeholder="Password" secureTextEntry value={password} onChangeText={setPassword} />
+        <TouchableOpacity style={styles.registerButton} onPress={handleRegister}>
+          <Text style={styles.registerText}>{loading ? "Registering..." : "Register"}</Text>
         </TouchableOpacity>
       </ScrollView>
     </LinearGradient>
@@ -95,86 +93,10 @@ export default function SignupUserScreen({ navigation }) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
-  scroll: { padding: 20 },
-  backButton: { marginBottom: 10 },
-  header: { 
-    fontSize: 28, 
-    fontWeight: 'bold', 
-    color: '#fff', 
-    textAlign: 'center',
-    textShadowColor: 'rgba(0, 0, 0, 0.8)',
-    textShadowOffset: { width: 1, height: 1 },
-    textShadowRadius: 2
-  },
-  subheader: { 
-    fontSize: 14, 
-    color: '#fff', 
-    textAlign: 'center', 
-    marginBottom: 20,
-    fontWeight: 'bold',
-    textShadowColor: 'rgba(0, 0, 0, 0.8)',
-    textShadowOffset: { width: 1, height: 1 },
-    textShadowRadius: 2
-  },
-  label: { 
-    fontSize: 14, 
-    fontWeight: 'bold', 
-    color: '#fff', 
-    marginTop: 10,
-    textShadowColor: 'rgba(0, 0, 0, 0.8)',
-    textShadowOffset: { width: 1, height: 1 },
-    textShadowRadius: 2
-  },
-  input: { 
-    backgroundColor: '#fff', 
-    borderRadius: 10, 
-    padding: 10, 
-    marginTop: 5 
-  },
-  row: { flexDirection: 'row', alignItems: 'center', marginTop: 5 },
-  otpButton: { 
-    backgroundColor: '#fff', 
-    paddingHorizontal: 10, 
-    justifyContent: 'center', 
-    borderRadius: 10, 
-    marginHorizontal: 5 
-  },
-  otpText: { 
-    color: '#000', 
-    fontWeight: 'bold',
-    textShadowColor: 'rgba(0, 0, 0, 0.3)',
-    textShadowOffset: { width: 1, height: 1 },
-    textShadowRadius: 1
-  },
-  radio: { flexDirection: 'row', alignItems: 'center', marginRight: 15 },
-  radioText: { 
-    color: '#fff', 
-    fontSize: 14,
-    fontWeight: 'bold',
-    textShadowColor: 'rgba(0, 0, 0, 0.8)',
-    textShadowOffset: { width: 1, height: 1 },
-    textShadowRadius: 2
-  },
-  idImage: { width: 80, height: 50, borderRadius: 5, marginRight: 10 },
-  uploadBox: { 
-    backgroundColor: '#fff', 
-    width: 50, 
-    height: 50, 
-    borderRadius: 10, 
-    alignItems: 'center', 
-    justifyContent: 'center' 
-  },
-  registerButton: { 
-    backgroundColor: '#fff', 
-    paddingVertical: 15, 
-    borderRadius: 10, 
-    marginTop: 20 
-  },
-  registerText: { 
-    textAlign: 'center', 
-    fontWeight: 'bold', 
-    fontSize: 29, 
-    color: '#000',
-  },
+  input: { backgroundColor: "#fff", borderRadius: 10, padding: 10, marginBottom: 10 },
+  pickerContainer: { backgroundColor: "#fff", borderRadius: 10, marginBottom: 10 },
+  datePickerButton: { backgroundColor: "#fff", borderRadius: 10, padding: 15, marginBottom: 10 },
+  datePickerText: { color: "#000" },
+  registerButton: { backgroundColor: "#fff", paddingVertical: 15, borderRadius: 10, marginTop: 10 },
+  registerText: { textAlign: "center", fontWeight: "bold", fontSize: 24, color: "#000" },
 });

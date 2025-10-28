@@ -30,26 +30,37 @@ const icons = {
   shortcuts: require("../assets/shortcuts.png"),
   setup: require("../assets/setup.png"),
   nearby: require("../assets/nearby.png"),
-  album: require("../assets/album.png"), // now used for Record Video
+  album: require("../assets/album.png"),
 };
 
-const DashboardScreen = ({ navigation }) => {
+export default function DashboardScreen({ navigation, route }) {
   const [menuVisible, setMenuVisible] = useState(false);
   const { isDarkMode, toggleTheme } = useContext(ThemeContext);
 
-  // 🔔 Emergency call confirmation
+  // Get logged-in user from route params
+  const loggedInUser = route.params?.userData;
+
+  if (!loggedInUser) {
+    navigation.replace("LoginScreen");
+    return null;
+  }
+
+  // Emergency call
   const handleEmergencyCall = (service, number) => {
-    Alert.alert(
-      `${service} Assistance`,
-      `Do you really need help from ${service}?`,
-      [
-        { text: "No", style: "cancel" },
-        { text: "Yes", onPress: () => Linking.openURL(number) },
-      ]
-    );
+    Alert.alert(`${service} Assistance`, `Do you really need help from ${service}?`, [
+      { text: "No", style: "cancel" },
+      {
+        text: "Yes",
+        onPress: async () => {
+          const supported = await Linking.canOpenURL(number);
+          if (supported) await Linking.openURL(number);
+          else Alert.alert("Error", "Cannot open dialer.");
+        },
+      },
+    ]);
   };
 
-  // ✅ Choose between recording new video or picking from gallery
+  // Record or pick media
   const handleRecordVideoChoice = () => {
     Alert.alert("Record or Select", "Choose an option:", [
       { text: "Cancel", style: "cancel" },
@@ -58,7 +69,6 @@ const DashboardScreen = ({ navigation }) => {
     ]);
   };
 
-  // ✅ Record new video
   const recordVideo = async () => {
     const permission = await ImagePicker.requestCameraPermissionsAsync();
     if (!permission.granted) {
@@ -73,12 +83,10 @@ const DashboardScreen = ({ navigation }) => {
     });
 
     if (!result.canceled) {
-      const video = result.assets[0];
-      askToSend(video);
+      askToSend(result.assets[0]);
     }
   };
 
-  // ✅ Pick image or video from gallery
   const pickMedia = async () => {
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!permission.granted) {
@@ -93,16 +101,14 @@ const DashboardScreen = ({ navigation }) => {
     });
 
     if (!result.canceled) {
-      const file = result.assets[0];
-      askToSend(file);
+      askToSend(result.assets[0]);
     }
   };
 
-  // ✅ Ask to send to rescuer
   const askToSend = (file) => {
     Alert.alert(
       "Send to Rescuer?",
-      `Would you like to send this ${file.type === "video" ? "video" : "image"} to the rescuer?`,
+      `Would you like to send this ${file.type === "video" ? "video" : "image"}?`,
       [
         { text: "Cancel", style: "cancel" },
         {
@@ -116,7 +122,6 @@ const DashboardScreen = ({ navigation }) => {
     );
   };
 
-  // ✅ Theme styles
   const themeStyles = {
     container: { backgroundColor: isDarkMode ? "#121212" : "#fff" },
     card: { backgroundColor: isDarkMode ? "#1E1E1E" : "#f8f8f8" },
@@ -138,15 +143,11 @@ const DashboardScreen = ({ navigation }) => {
 
           <View style={styles.headerRight}>
             <TouchableOpacity onPress={toggleTheme} style={{ marginRight: 10 }}>
-              <Ionicons
-                name={isDarkMode ? "sunny-outline" : "moon-outline"}
-                size={24}
-                color="#fff"
-              />
+              <Ionicons name={isDarkMode ? "sunny-outline" : "moon-outline"} size={24} color="#fff" />
             </TouchableOpacity>
 
             <TouchableOpacity
-              onPress={() => navigation.navigate("UserPageScreen")}
+              onPress={() => navigation.navigate("UserPageScreen", { userData: loggedInUser })}
             >
               <Icon name="account-circle" size={30} color="#fff" />
             </TouchableOpacity>
@@ -193,33 +194,20 @@ const DashboardScreen = ({ navigation }) => {
           </TouchableOpacity>
 
           <TouchableOpacity
-  style={[styles.card, themeStyles.card]}
-  onPress={() =>
-    Alert.alert("Select Rescuer Type", "Who do you need?", [
-      {
-        text: "Police",
-        onPress: () => navigation.navigate("NearbyRescuerScreen", { type: "Police" }),
-      },
-      {
-        text: "Fire Station",
-        onPress: () => navigation.navigate("NearbyRescuerScreen", { type: "Fire Station" }),
-      },
-      {
-        text: "Hospital",
-        onPress: () => navigation.navigate("NearbyRescuerScreen", { type: "Hospital" }),
-      },
-      { text: "Cancel", style: "cancel" },
-    ])
-  }
->
-  <Image source={icons.nearby} style={styles.icon} />
-  <Text style={[styles.label, themeStyles.text]}>Nearby Rescuer</Text>
-</TouchableOpacity>
+            style={[styles.card, themeStyles.card]}
+            onPress={() =>
+              Alert.alert("Select Rescuer Type", "Who do you need?", [
+                { text: "Police", onPress: () => navigation.navigate("NearbyRescuerScreen", { type: "Police" }) },
+                { text: "Fire Station", onPress: () => navigation.navigate("NearbyRescuerScreen", { type: "Fire Station" }) },
+                { text: "Hospital", onPress: () => navigation.navigate("NearbyRescuerScreen", { type: "Hospital" }) },
+                { text: "Cancel", style: "cancel" },
+              ])
+            }
+          >
+            <Image source={icons.nearby} style={styles.icon} />
+            <Text style={[styles.label, themeStyles.text]}>Nearby Rescuer</Text>
+          </TouchableOpacity>
 
-
-
-
-          {/* ✅ Only one Record Video button now */}
           <TouchableOpacity
             style={[styles.card, themeStyles.card]}
             onPress={handleRecordVideoChoice}
@@ -242,87 +230,43 @@ const DashboardScreen = ({ navigation }) => {
             onPressOut={() => setMenuVisible(false)}
           >
             <View style={[styles.menuContainer, themeStyles.menuContainer]}>
-              <TouchableOpacity
-                style={styles.menuItem}
-                onPress={() => {
-                  setMenuVisible(false);
-                  navigation.navigate("CPRScreen");
-                }}
-              >
-                <Text style={[styles.menuText, themeStyles.menuText]}>
-                  How to CPR
-                </Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={styles.menuItem}
-                onPress={() => {
-                  setMenuVisible(false);
-                  navigation.navigate("WoundCareScreen");
-                }}
-              >
-                <Text style={[styles.menuText, themeStyles.menuText]}>
-                  Wound Care
-                </Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={styles.menuItem}
-                onPress={() => {
-                  setMenuVisible(false);
-                  navigation.navigate("SkinBurnScreen");
-                }}
-              >
-                <Text style={[styles.menuText, themeStyles.menuText]}>
-                  Skin Burn
-                </Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={styles.menuItem}
-                onPress={() => {
-                  setMenuVisible(false);
-                  navigation.navigate("TutorialScreen");
-                }}
-              >
-                <Text style={[styles.menuText, themeStyles.menuText]}>
-                  Tutorial
-                </Text>
-              </TouchableOpacity>
+              {["CPRScreen", "WoundCareScreen", "SkinBurnScreen", "TutorialScreen"].map((screen, i) => (
+                <TouchableOpacity
+                  key={i}
+                  style={styles.menuItem}
+                  onPress={() => {
+                    setMenuVisible(false);
+                    navigation.navigate(screen);
+                  }}
+                >
+                  <Text style={[styles.menuText, themeStyles.menuText]}>
+                    {screen.replace("Screen", "").replace(/([A-Z])/g, " $1").trim()}
+                  </Text>
+                </TouchableOpacity>
+              ))}
 
               <View style={styles.menuFooter}>
                 <TouchableOpacity
                   style={styles.menuButton}
                   onPress={() => navigation.navigate("SettingsScreen")}
                 >
-                  <Text style={[styles.menuText, themeStyles.menuText]}>
-                    ⚙️ Settings
-                  </Text>
+                  <Text style={[styles.menuText, themeStyles.menuText]}>⚙️ Settings</Text>
                 </TouchableOpacity>
 
-                <TouchableOpacity
-                  style={styles.menuItem}
-                  onPress={() => {
-                    setMenuVisible(false);
-                    navigation.navigate("ReachOutScreen");
-                  }}
-                >
-                  <Text style={[styles.menuText, themeStyles.menuText]}>
-                    Reach Out
-                  </Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={styles.menuItem}
-                  onPress={() => {
-                    setMenuVisible(false);
-                    navigation.navigate("FeedbackScreen");
-                  }}
-                >
-                  <Text style={[styles.menuText, themeStyles.menuText]}>
-                    Feedback
-                  </Text>
-                </TouchableOpacity>
+                {["ReachOutScreen", "FeedbackScreen"].map((screen, i) => (
+                  <TouchableOpacity
+                    key={i}
+                    style={styles.menuItem}
+                    onPress={() => {
+                      setMenuVisible(false);
+                      navigation.navigate(screen);
+                    }}
+                  >
+                    <Text style={[styles.menuText, themeStyles.menuText]}>
+                      {screen.replace("Screen", "").replace(/([A-Z])/g, " $1").trim()}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
               </View>
             </View>
           </TouchableOpacity>
@@ -330,7 +274,7 @@ const DashboardScreen = ({ navigation }) => {
       </View>
     </SafeAreaView>
   );
-};
+}
 
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: "#A83232" },
@@ -345,12 +289,7 @@ const styles = StyleSheet.create({
     paddingTop: Platform.OS === "android" ? StatusBar.currentHeight : 0,
   },
   headerRight: { flexDirection: "row", alignItems: "center" },
-  headerTitle: {
-    fontSize: 20,
-    fontWeight: "bold",
-    color: "#fff",
-    textAlign: "center",
-  },
+  headerTitle: { fontSize: 20, fontWeight: "bold", color: "#fff", textAlign: "center" },
   grid: {
     flexDirection: "row",
     flexWrap: "wrap",
@@ -369,22 +308,11 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.2,
     shadowRadius: 3,
   },
-  icon: {
-    width: 60,
-    height: 60,
-    resizeMode: "contain",
-    marginBottom: 8,
-  },
+  icon: { width: 60, height: 60, resizeMode: "contain", marginBottom: 8 },
   label: { fontSize: 15, fontWeight: "bold", textAlign: "center" },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.5)",
-    justifyContent: "flex-start",
-  },
+  modalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "flex-start" },
   menuContainer: { paddingVertical: 20, paddingHorizontal: 15 },
   menuItem: { paddingVertical: 12 },
   menuText: { fontSize: 18 },
   menuFooter: { borderTopWidth: 1, borderTopColor: "#ccc", marginTop: 20 },
 });
-
-export default DashboardScreen;
