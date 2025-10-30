@@ -123,64 +123,6 @@ app.post('/rescuers/signup', async (req, res) => {
   }
 });
 
-// ---------------- 📍 FETCH ALL STATIONS ----------------
-app.get('/stations', async (req, res) => {
-  try {
-    await poolConnect;
-
-    // Fetch all rescuers/stations
-    const result = await pool.request()
-      .query(`
-        SELECT 
-          Id, Name, Type, StationLocation, Latitude, Longitude, Contact
-        FROM Rescuers
-        ORDER BY Name
-      `);
-
-    res.send({ success: true, stations: result.recordset });
-  } catch (err) {
-    console.error("❌ Fetch Stations Error:", err);
-    res.status(500).send({ success: false, error: err.message });
-  }
-});
-
-
-
-// ---------------- 📄 FETCH INCIDENTS ----------------
-app.get('/incidents', async (req, res) => {
-  try {
-    await poolConnect;
-    const result = await pool.request().query('SELECT * FROM Incidents ORDER BY CreatedAt DESC');
-    res.send({ success: true, incidents: result.recordset });
-  } catch (err) {
-    console.error("❌ Fetch Incidents Error:", err);
-    res.status(500).send({ success: false, error: err.message });
-  }
-});
-
-// ---------------- ⚡ UPDATE INCIDENT STATUS ----------------
-app.put('/incidents/:id/status', async (req, res) => {
-  const incidentId = req.params.id;
-  const { status } = req.body;
-
-  try {
-    await poolConnect;
-    const result = await pool.request()
-      .input('id', sql.Int, incidentId)
-      .input('status', sql.VarChar, status)
-      .query('UPDATE Incidents SET Status = @status WHERE Id = @id');
-
-    if (result.rowsAffected[0] === 0) {
-      return res.status(404).send({ success: false, message: 'Incident not found.' });
-    }
-
-    res.send({ success: true, message: 'Incident status updated!' });
-  } catch (err) {
-    console.error('❌ Update Incident Status Error:', err);
-    res.status(500).send({ success: false, error: err.message });
-  }
-});
-
 // ---------------- 🔑 USER LOGIN ----------------
 app.post('/users/login', async (req, res) => {
   const { email, password } = req.body;
@@ -225,6 +167,60 @@ app.post('/rescuers/login', async (req, res) => {
     res.send({ success: true, rescuer });
   } catch (err) {
     console.error("❌ Rescuer Login Error:", err);
+    res.status(500).send({ success: false, error: err.message });
+  }
+});
+
+// ---------------- 📍 FETCH ALL STATIONS ----------------
+app.get('/stations', async (req, res) => {
+  try {
+    await poolConnect;
+
+    const result = await pool.request()
+      .query(`
+        SELECT Id, Name, Type, StationLocation, Latitude, Longitude, Contact
+        FROM Rescuers
+        ORDER BY Name
+      `);
+
+    res.send({ success: true, stations: result.recordset });
+  } catch (err) {
+    console.error("❌ Fetch Stations Error:", err);
+    res.status(500).send({ success: false, error: err.message });
+  }
+});
+
+// ---------------- 📄 FETCH INCIDENTS ----------------
+app.get('/incidents', async (req, res) => {
+  try {
+    await poolConnect;
+    const result = await pool.request().query('SELECT * FROM Incidents ORDER BY CreatedAt DESC');
+    res.send({ success: true, incidents: result.recordset });
+  } catch (err) {
+    console.error("❌ Fetch Incidents Error:", err);
+    res.status(500).send({ success: false, error: err.message });
+  }
+});
+
+// ---------------- ⚡ UPDATE INCIDENT STATUS ----------------
+app.put('/incidents/:id/status', async (req, res) => {
+  const incidentId = req.params.id;
+  const { status } = req.body;
+
+  try {
+    await poolConnect;
+    const result = await pool.request()
+      .input('id', sql.Int, incidentId)
+      .input('status', sql.VarChar, status)
+      .query('UPDATE Incidents SET Status = @status WHERE Id = @id');
+
+    if (result.rowsAffected[0] === 0) {
+      return res.status(404).send({ success: false, message: 'Incident not found.' });
+    }
+
+    res.send({ success: true, message: 'Incident status updated!' });
+  } catch (err) {
+    console.error('❌ Update Incident Status Error:', err);
     res.status(500).send({ success: false, error: err.message });
   }
 });

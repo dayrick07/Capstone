@@ -25,24 +25,24 @@ export default function SignupUserScreen({ navigation }) {
     }
 
     setLoading(true);
-    const tempUserData = {
-      name: fullName,
-      email,
-      password,
-      type: "user",
-      gender,
-      mobile,
-      language,
-      birthdate: birthdate.toISOString().split("T")[0],
-      address,
-    };
-
     try {
-      const otpRes = await axios.post(`${SERVER_URL}/users/send-otp`, { email });
-      if (otpRes.data.success) {
-        navigation.navigate("OTPVerificationScreen", { email, userData: tempUserData, type: "user" });
+      const response = await axios.post(`${SERVER_URL}/users/signup`, {
+        name: fullName,
+        email,
+        password,
+        type: "user",
+        gender,
+        mobile,
+        language,
+        birthdate: birthdate.toISOString().split("T")[0],
+        address
+      });
+
+      if (response.data.success) {
+        Alert.alert("Success", response.data.message);
+        navigation.replace("LoginScreen");
       } else {
-        Alert.alert("Error", "Failed to send OTP. Try again.");
+        Alert.alert("Error", response.data.message);
       }
     } catch (error) {
       console.error(error);
@@ -53,7 +53,10 @@ export default function SignupUserScreen({ navigation }) {
   };
 
   const showDatePickerModal = () => setShowDatePicker(true);
-  const onDateChange = (event, selectedDate) => { setShowDatePicker(Platform.OS === "ios"); if (selectedDate) setBirthdate(selectedDate); };
+  const onDateChange = (event, selectedDate) => {
+    setShowDatePicker(Platform.OS === "ios");
+    if (selectedDate) setBirthdate(selectedDate);
+  };
 
   return (
     <LinearGradient colors={["#ee7d7dff", "#8B0000"]} style={{ flex: 1 }}>
