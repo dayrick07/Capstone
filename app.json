@@ -29,14 +29,13 @@
       "edgeToEdgeEnabled": true,
       "package": "com.alfonsose7.Safekafe",
       "android": {
-      "permissions": [
-        "CAMERA",
-        "RECORD_AUDIO",
-        "WRITE_EXTERNAL_STORAGE",
-        "READ_EXTERNAL_STORAGE"
-      ]
-}
-
+        "permissions": [
+          "CAMERA",
+          "RECORD_AUDIO",
+          "WRITE_EXTERNAL_STORAGE",
+          "READ_EXTERNAL_STORAGE"
+        ]
+      }
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -45,6 +44,10 @@
       "eas": {
         "projectId": "cb4ebc0f-ad74-4a07-951b-ffb3b503b4de"
       }
-    }
+    },
+    "plugins": [
+      "expo-audio",
+      "expo-video"
+    ]
   }
 }

@@ -6,7 +6,7 @@ import { createNativeStackNavigator } from "@react-navigation/native-stack";
 // Screens
 import LoginScreen from "./screens/LoginScreen";
 import SignupUserScreen from "./screens/SignupUserScreen";
-import SignupRescuerScreen from "./screens/SignupRescuerScreen";
+
 import DashboardScreen from "./screens/DashboardScreen";
 import UserPageScreen from "./screens/UserPageScreen";
 import SetupScreen from "./screens/SetupScreen";
@@ -31,6 +31,10 @@ import AddChildScreen from "./screens/AddChildScreen";
 import ContactListScreen from "./screens/ContactListScreen";
 import CreateContactScreen from "./screens/CreateContactScreen";
 import NearbyRescuerScreen from "./screens/NearbyRescuerScreen";
+import RescuerSignupScreen from "./screens/RescuerSignupScreen";
+import RescuerHomeScreen from "./screens/RescuerHomeScreen";
+import RescuerPageScreen from "./screens/RescuerPageScreen";
+import IncidentMapScreen from "./screens/IncidentMapScreen";
 
 
 // Context & Global Listener
@@ -47,9 +51,9 @@ export default function App() {
       <NavigationContainer>
         <Stack.Navigator screenOptions={{ headerShown: false }}>
           {/* Authentication Screens */}
-          <Stack.Screen name="Login" component={LoginScreen} />
-          <Stack.Screen name="SignupUser" component={SignupUserScreen} />
-          <Stack.Screen name="SignupRescuer" component={SignupRescuerScreen} />
+          <Stack.Screen name="LoginScreen" component={LoginScreen} />
+          <Stack.Screen name="SignupUserScreen" component={SignupUserScreen} />
+          <Stack.Screen name="RescuerSignupScreen" component={RescuerSignupScreen} />
 
           {/* Main Screens */}
           <Stack.Screen name="DashboardScreen" component={DashboardScreen} />
@@ -61,6 +65,8 @@ export default function App() {
           <Stack.Screen name="PhysicalGestureSetupScreen" component={PhysicalGestureSetupScreen} />
           <Stack.Screen name="ParentalSetupScreen" component={ParentalSetupScreen}/>
           <Stack.Screen name="NearbyRescuerScreen" component={NearbyRescuerScreen} />
+          
+          <Stack.Screen name="IncidentMapScreen" component={IncidentMapScreen} />
 
 
           {/* Tutorial & Help Screens */}
@@ -76,6 +82,7 @@ export default function App() {
           <Stack.Screen name="RecordVideoScreen" component={RecordVideoScreen} />
           <Stack.Screen name="Album" component={AlbumScreen} />
 
+
           {/* Parent feature*/}
           <Stack.Screen name="CreatePinScreen" component={CreatePinScreen} />
           <Stack.Screen name="ParentPageScreen" component={ParentPageScreen} />
@@ -85,6 +92,8 @@ export default function App() {
           <Stack.Screen name="AddChildScreen" component={AddChildScreen} />
           <Stack.Screen name="ContactListScreen" component={ContactListScreen} />
           <Stack.Screen name="CreateContactScreen" component={CreateContactScreen} />
+          <Stack.Screen name="RescuerHomeScreen" component={RescuerHomeScreen} />
+          <Stack.Screen name="RescuerPageScreen" component={RescuerPageScreen} />
 
 
         </Stack.Navigator>
