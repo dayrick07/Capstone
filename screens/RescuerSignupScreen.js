@@ -83,7 +83,7 @@ export default function RescuerSignupScreen({ navigation }) {
           <Picker selectedValue={type} onValueChange={setType}>
             <Picker.Item label="Police" value="Police" />
             <Picker.Item label="Fire Station" value="Fire Station" />
-            <Picker.Item label="Medical" value="Medical" />
+            <Picker.Item label="Ambulance" value="Ambulance" />
           </Picker>
         </View>
 

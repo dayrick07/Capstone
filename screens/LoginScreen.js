@@ -27,17 +27,12 @@ export default function LoginScreen({ navigation }) {
 
     setLoading(true);
     try {
-      // Determine endpoint based on role
       const endpoint = role === "User" ? "/users/login" : "/rescuers/login";
-
       const response = await axios.post(`${SERVER_URL}${endpoint}`, { email, password });
 
       if (response.data.success) {
-        // Get user or rescuer object
         const user = response.data.user || response.data.rescuer;
-
         Alert.alert("Login Successful", `Welcome ${user.Name}`);
-
         if (role === "User") {
           navigation.replace("DashboardScreen", { userData: user });
         } else {
@@ -127,7 +122,6 @@ export default function LoginScreen({ navigation }) {
 
 const styles = StyleSheet.create({
   container: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20 },
-  appTitle: { fontSize: 30, fontWeight: 'bold', color: '#fff' },
   logo: { width: 120, height: 120, marginBottom: 10 },
   locationText: { fontSize: 13, color: '#fff', marginBottom: 40 },
   input: {

@@ -1,27 +1,41 @@
 import React, { useState, useEffect } from "react";
-import { View, Text, TouchableOpacity, StyleSheet, FlatList, Alert } from "react-native";
-import { LinearGradient } from "expo-linear-gradient";
+import {
+  View,
+  Text,
+  FlatList,
+  TouchableOpacity,
+  StyleSheet,
+  Alert,
+} from "react-native";
 import axios from "axios";
-import { SERVER_URL } from "../config";
+
+const SERVER_URL = "http://192.168.0.111:3000"; // your backend local IP
 
 export default function RescuerHomeScreen({ navigation, route }) {
-  const rescuer = route.params?.rescuerData || { Name: "Rescuer" };
+  const rescuerData = route.params?.rescuerData; // Get logged-in rescuer
+
+  if (!rescuerData) {
+    Alert.alert("Error", "No rescuer data found. Returning to login.");
+    navigation.replace("LoginScreen");
+    return null;
+  }
+
   const [incidents, setIncidents] = useState([]);
   const [loading, setLoading] = useState(false);
 
-  // Fetch incidents from server
   const fetchIncidents = async () => {
     setLoading(true);
     try {
       const response = await axios.get(`${SERVER_URL}/incidents`);
       if (response.data.success) {
-        setIncidents(response.data.incidents);
-      } else {
-        Alert.alert("Error", "Failed to load incidents.");
+        const activeIncidents = response.data.incidents.filter(
+          (i) => i.Status !== "Done"
+        );
+        setIncidents(activeIncidents);
       }
-    } catch (error) {
-      console.error("❌ Fetch Incidents Error:", error.message);
-      Alert.alert("Error", "Cannot fetch incidents. Make sure your API is running.");
+    } catch (err) {
+      console.error("❌ Fetch Incidents Error:", err.message);
+      Alert.alert("Error", "Cannot fetch incidents from server.");
     } finally {
       setLoading(false);
     }
@@ -31,141 +45,117 @@ export default function RescuerHomeScreen({ navigation, route }) {
     fetchIncidents();
   }, []);
 
-  // Update incident status
-  const updateStatus = async (incidentId, status) => {
+  const handleViewOnMap = (incident) => {
+    if (!incident.Latitude || !incident.Longitude) {
+      Alert.alert("No Location Data", "This incident has no valid coordinates.");
+      return;
+    }
+    navigation.navigate("IncidentMapScreen", { incident });
+  };
+
+  const updateStatus = async (id, status) => {
     try {
-      const response = await axios.put(`${SERVER_URL}/incidents/${incidentId}/status`, { status });
+      const response = await axios.put(`${SERVER_URL}/incidents/${id}/status`, {
+        status,
+      });
       if (response.data.success) {
-        Alert.alert("Success", `Status updated to ${status}`);
-        fetchIncidents(); // refresh list
-      } else {
-        Alert.alert("Error", "Failed to update status.");
+        Alert.alert("Updated", `Incident marked as ${status}`);
+        fetchIncidents();
       }
-    } catch (error) {
-      console.error("❌ Update Status Error:", error.message);
-      Alert.alert("Error", "Cannot update status.");
+    } catch (err) {
+      console.error("❌ Update Status Error:", err.message);
+      Alert.alert("Error", "Failed to update incident status.");
     }
   };
 
-  // Show options for incident
-  const handleIncidentPress = (incident) => {
-    Alert.alert(
-      "Update Incident Status",
-      `Type: ${incident.Type}\nLocation: ${incident.Location}\nCurrent Status: ${incident.Status}`,
-      [
-        { text: "Pending", onPress: () => updateStatus(incident.Id, "Pending") },
-        { text: "Accepted", onPress: () => updateStatus(incident.Id, "Accepted") },
-        { text: "Done", onPress: () => updateStatus(incident.Id, "Done") },
-        { text: "Cancel", style: "cancel" }
-      ]
-    );
-  };
-
   return (
-    <LinearGradient colors={["#ee7d7dff", "#8B0000"]} style={styles.container}>
-      <Text style={styles.welcomeText}>Welcome, {rescuer.Name}!</Text>
-      <Text style={styles.roleText}>Rescuer</Text>
+    <View style={styles.container}>
+      <Text style={styles.header}>🚨 Active Incidents</Text>
+      <FlatList
+        data={incidents}
+        keyExtractor={(item) => item.Id.toString()}
+        refreshing={loading}
+        onRefresh={fetchIncidents}
+        renderItem={({ item }) => (
+          <View style={styles.card}>
+            <Text style={styles.title}>{item.Type}</Text>
+            <Text>📍 {item.Location}</Text>
+            <Text>Status: {item.Status}</Text>
 
-      {/* Buttons */}
-      <View style={styles.buttonContainer}>
-        <TouchableOpacity
-          style={styles.button}
-          onPress={() => Alert.alert("Info", "Scroll down to see incidents.")}
-        >
-          <Text style={styles.buttonText}>View Incidents</Text>
-        </TouchableOpacity>
+            <View style={styles.actions}>
+              <TouchableOpacity
+                style={[styles.button, { backgroundColor: "#007bff" }]}
+                onPress={() => handleViewOnMap(item)}
+              >
+                <Text style={styles.buttonText}>View on Map</Text>
+              </TouchableOpacity>
 
-        <TouchableOpacity
-          style={styles.button}
-          onPress={() => navigation.navigate("RescuerPageScreen", { rescuerData: rescuer })}
-        >
-          <Text style={styles.buttonText}>Profile & Settings</Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* Incident List */}
-      <Text style={styles.sectionTitle}>Nearby Incidents</Text>
-      {loading ? (
-        <Text style={{ color: "#fff", textAlign: "center", marginTop: 20 }}>Loading incidents...</Text>
-      ) : (
-        <FlatList
-          data={incidents}
-          keyExtractor={(item) => item.Id.toString()}
-          renderItem={({ item }) => (
-            <View style={styles.incidentCard}>
-              <Text style={styles.incidentType}>{item.Type}</Text>
-              <Text style={styles.incidentDetails}>{item.Location}</Text>
-              <Text style={styles.incidentStatus}>Status: {item.Status}</Text>
-
-              {/* Buttons inside card */}
-              <View style={styles.cardButtonContainer}>
-                <TouchableOpacity
-                  style={styles.statusButton}
-                  onPress={() => handleIncidentPress(item)}
-                >
-                  <Text style={styles.statusButtonText}>Update Status</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={styles.mapButton}
-                  onPress={() => navigation.navigate("IncidentMapScreen", { incident: item })}
-                >
-                  <Text style={styles.mapButtonText}>View on Map</Text>
-                </TouchableOpacity>
-              </View>
+              <TouchableOpacity
+                style={[styles.button, { backgroundColor: "#A83232" }]}
+                onPress={() =>
+                  Alert.alert("Confirm", "Mark this incident as done?", [
+                    { text: "Cancel", style: "cancel" },
+                    { text: "Yes", onPress: () => updateStatus(item.Id, "Done") },
+                  ])
+                }
+              >
+                <Text style={styles.buttonText}>Mark Done</Text>
+              </TouchableOpacity>
             </View>
-          )}
-        />
-      )}
-    </LinearGradient>
+          </View>
+        )}
+      />
+
+      <TouchableOpacity
+        style={styles.profileButton}
+        onPress={() =>
+          navigation.navigate("RescuerPageScreen", {
+            rescuerData: rescuerData,
+          })
+        }
+      >
+        <Text style={styles.profileText}>👤 View Profile</Text>
+      </TouchableOpacity>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 20 },
-  welcomeText: { fontSize: 26, fontWeight: "bold", color: "#fff" },
-  roleText: { fontSize: 16, color: "#fff", marginBottom: 20 },
-  buttonContainer: { flexDirection: "row", justifyContent: "space-between", marginBottom: 20 },
-  button: {
-    flex: 1,
-    backgroundColor: "#fff",
-    marginHorizontal: 5,
-    paddingVertical: 15,
-    borderRadius: 10,
-    alignItems: "center",
+  container: { flex: 1, padding: 15, backgroundColor: "#fff" },
+  header: {
+    fontSize: 22,
+    fontWeight: "bold",
+    marginBottom: 15,
+    color: "#8B0000",
+    textAlign: "center",
   },
-  buttonText: { fontSize: 16, fontWeight: "bold", color: "#8B0000" },
-  sectionTitle: { fontSize: 20, fontWeight: "bold", color: "#fff", marginBottom: 10 },
-  incidentCard: {
-    backgroundColor: "#fff",
-    borderRadius: 10,
+  card: {
+    backgroundColor: "#f9f9f9",
     padding: 15,
+    borderRadius: 10,
     marginBottom: 10,
+    borderWidth: 1,
+    borderColor: "#ddd",
   },
-  incidentType: { fontSize: 16, fontWeight: "bold", color: "#8B0000" },
-  incidentDetails: { fontSize: 14, color: "#000" },
-  incidentStatus: { fontSize: 14, color: "#555", marginTop: 5 },
-  cardButtonContainer: {
+  title: { fontSize: 18, fontWeight: "bold", marginBottom: 5 },
+  actions: {
     flexDirection: "row",
     justifyContent: "space-between",
     marginTop: 10,
   },
-  statusButton: {
+  button: {
     flex: 1,
+    marginHorizontal: 5,
+    padding: 10,
+    borderRadius: 8,
+  },
+  buttonText: { color: "#fff", textAlign: "center", fontWeight: "bold" },
+  profileButton: {
     backgroundColor: "#8B0000",
-    paddingVertical: 8,
-    borderRadius: 8,
+    padding: 15,
+    borderRadius: 10,
     alignItems: "center",
-    marginRight: 5,
+    marginTop: 10,
   },
-  statusButtonText: { color: "#fff", fontWeight: "bold" },
-  mapButton: {
-    flex: 1,
-    backgroundColor: "#ff7d7d",
-    paddingVertical: 8,
-    borderRadius: 8,
-    alignItems: "center",
-    marginLeft: 5,
-  },
-  mapButtonText: { color: "#fff", fontWeight: "bold" },
+  profileText: { color: "#fff", fontSize: 16, fontWeight: "bold" },
 });

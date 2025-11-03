@@ -16,6 +16,8 @@ import Icon from "react-native-vector-icons/MaterialIcons";
 import { Ionicons } from "@expo/vector-icons";
 import { ThemeContext } from "../ThemeContext";
 import * as ImagePicker from "expo-image-picker";
+import * as Location from "expo-location"; // ✅ Added for GPS
+import axios from "axios";
 
 // Hotline numbers
 const POLICE_NUMBER = "tel:911";
@@ -31,13 +33,16 @@ const icons = {
   setup: require("../assets/setup.png"),
   nearby: require("../assets/nearby.png"),
   album: require("../assets/album.png"),
+  contacts: require("../assets/contacts.png"), // ✅ NEW ICON for emergency contacts
 };
+
+// Set server URL
+const SERVER_URL = "http://192.168.0.111:3000"; // ⚙️ your backend IP
 
 export default function DashboardScreen({ navigation, route }) {
   const [menuVisible, setMenuVisible] = useState(false);
   const { isDarkMode, toggleTheme } = useContext(ThemeContext);
 
-  // Get logged-in user from route params
   const loggedInUser = route.params?.userData;
 
   if (!loggedInUser) {
@@ -45,22 +50,66 @@ export default function DashboardScreen({ navigation, route }) {
     return null;
   }
 
-  // Emergency call
-  const handleEmergencyCall = (service, number) => {
-    Alert.alert(`${service} Assistance`, `Do you really need help from ${service}?`, [
-      { text: "No", style: "cancel" },
-      {
-        text: "Yes",
-        onPress: async () => {
-          const supported = await Linking.canOpenURL(number);
-          if (supported) await Linking.openURL(number);
-          else Alert.alert("Error", "Cannot open dialer.");
-        },
-      },
-    ]);
+  // --------------------------- REPORT INCIDENT ---------------------------
+  const reportIncident = async (service) => {
+    try {
+      // ✅ 1. Ask for location permission
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== "granted") {
+        Alert.alert("Permission Denied", "Location access is required to report incidents.");
+        return;
+      }
+
+      // ✅ 2. Get exact coordinates
+      const { coords } = await Location.getCurrentPositionAsync({});
+      const { latitude, longitude } = coords;
+
+      // ✅ 3. Convert to readable address
+      const [address] = await Location.reverseGeocodeAsync({ latitude, longitude });
+      const locationText = `${address.name || ""}, ${address.city || ""}, ${address.region || ""}`;
+
+      // ✅ 4. Send to backend
+      const response = await axios.post(`${SERVER_URL}/incidents`, {
+        Type: service,
+        Location: locationText,
+        Latitude: latitude,
+        Longitude: longitude,
+        Status: "Pending",
+      });
+
+      if (response.status === 200) {
+        Alert.alert("✅ Success", "Incident reported!");
+      }
+    } catch (err) {
+      console.error("❌ Error reporting incident:", err.response?.data || err.message);
+      Alert.alert(
+        "Error",
+        "Failed to report incident. Make sure your server is running and reachable."
+      );
+    }
   };
 
-  // Record or pick media
+  // --------------------------- EMERGENCY CALL ---------------------------
+  const handleEmergencyCall = (service, number) => {
+    Alert.alert(
+      `${service} Assistance`,
+      `Do you really need help from ${service}?`,
+      [
+        { text: "No", style: "cancel" },
+        {
+          text: "Yes",
+          onPress: async () => {
+            await reportIncident(service);
+            const supported = await Linking.canOpenURL(number);
+            if (supported) await Linking.openURL(number);
+            else Alert.alert("Error", "Cannot open dialer.");
+          },
+        },
+      ]
+    );
+  };
+
+  // --------------------------- RECORD / PICK MEDIA ---------------------------
   const handleRecordVideoChoice = () => {
     Alert.alert("Record or Select", "Choose an option:", [
       { text: "Cancel", style: "cancel" },
@@ -143,7 +192,11 @@ export default function DashboardScreen({ navigation, route }) {
 
           <View style={styles.headerRight}>
             <TouchableOpacity onPress={toggleTheme} style={{ marginRight: 10 }}>
-              <Ionicons name={isDarkMode ? "sunny-outline" : "moon-outline"} size={24} color="#fff" />
+              <Ionicons
+                name={isDarkMode ? "sunny-outline" : "moon-outline"}
+                size={24}
+                color="#fff"
+              />
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -166,10 +219,10 @@ export default function DashboardScreen({ navigation, route }) {
 
           <TouchableOpacity
             style={[styles.card, themeStyles.card]}
-            onPress={() => handleEmergencyCall("Hospital", HOSPITAL_NUMBER)}
+            onPress={() => handleEmergencyCall("Ambulance", HOSPITAL_NUMBER)}
           >
             <Image source={icons.hospital} style={styles.icon} />
-            <Text style={[styles.label, themeStyles.text]}>Hospital</Text>
+            <Text style={[styles.label, themeStyles.text]}>Ambulance</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -199,7 +252,7 @@ export default function DashboardScreen({ navigation, route }) {
               Alert.alert("Select Rescuer Type", "Who do you need?", [
                 { text: "Police", onPress: () => navigation.navigate("NearbyRescuerScreen", { type: "Police" }) },
                 { text: "Fire Station", onPress: () => navigation.navigate("NearbyRescuerScreen", { type: "Fire Station" }) },
-                { text: "Hospital", onPress: () => navigation.navigate("NearbyRescuerScreen", { type: "Hospital" }) },
+                { text: "Ambulance", onPress: () => navigation.navigate("NearbyRescuerScreen", { type: "Ambulance" }) },
                 { text: "Cancel", style: "cancel" },
               ])
             }
@@ -214,6 +267,15 @@ export default function DashboardScreen({ navigation, route }) {
           >
             <Image source={icons.album} style={styles.icon} />
             <Text style={[styles.label, themeStyles.text]}>Record Video</Text>
+          </TouchableOpacity>
+
+          {/* ✅ NEW BUTTON: Emergency Contact List */}
+          <TouchableOpacity
+            style={[styles.card, themeStyles.card]}
+            onPress={() => navigation.navigate("ContactListScreen", { userData: loggedInUser })}
+          >
+            <Image source={icons.contacts} style={styles.icon} />
+            <Text style={[styles.label, themeStyles.text]}>Emergency Contacts</Text>
           </TouchableOpacity>
         </View>
 
@@ -277,42 +339,19 @@ export default function DashboardScreen({ navigation, route }) {
 }
 
 const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: "#A83232" },
-  container: { flex: 1 },
-  header: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingHorizontal: 15,
-    paddingVertical: 12,
-    backgroundColor: "#A83232",
-    paddingTop: Platform.OS === "android" ? StatusBar.currentHeight : 0,
-  },
+  safeArea: { flex: 1, paddingTop: StatusBar.currentHeight },
+  container: { flex: 1, padding: 10 },
+  header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 20 },
+  headerTitle: { color: "#fff", fontSize: 20, fontWeight: "bold" },
   headerRight: { flexDirection: "row", alignItems: "center" },
-  headerTitle: { fontSize: 20, fontWeight: "bold", color: "#fff", textAlign: "center" },
-  grid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    justifyContent: "space-around",
-    marginTop: 20,
-  },
-  card: {
-    width: "40%",
-    borderRadius: 10,
-    padding: 15,
-    marginVertical: 10,
-    alignItems: "center",
-    elevation: 3,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 3,
-  },
-  icon: { width: 60, height: 60, resizeMode: "contain", marginBottom: 8 },
-  label: { fontSize: 15, fontWeight: "bold", textAlign: "center" },
+  grid: { flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between" },
+  card: { width: "30%", height: 100, borderRadius: 10, justifyContent: "center", alignItems: "center", marginBottom: 15 },
+  icon: { width: 40, height: 40, marginBottom: 5, resizeMode: "contain" },
+  label: { fontSize: 12, fontWeight: "bold", textAlign: "center" },
   modalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "flex-start" },
-  menuContainer: { paddingVertical: 20, paddingHorizontal: 15 },
+  menuContainer: { width: "70%", padding: 20, height: "100%" },
   menuItem: { paddingVertical: 12 },
-  menuText: { fontSize: 18 },
-  menuFooter: { borderTopWidth: 1, borderTopColor: "#ccc", marginTop: 20 },
+  menuText: { fontSize: 16 },
+  menuFooter: { marginTop: 20 },
+  menuButton: { paddingVertical: 10 },
 });
