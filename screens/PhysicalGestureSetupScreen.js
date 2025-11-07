@@ -11,36 +11,48 @@ import {
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Accelerometer } from "expo-sensors";
 import Svg, { Circle } from "react-native-svg";
+// Assuming you have installed 'react-native-vector-icons' or similar for icons
+import { MaterialIcons } from "@expo/vector-icons"; 
 import { ThemeContext } from "../ThemeContext"; // ✅ Make sure this path is correct
 
+// --- Constants ---
 const gestures = ["Swipe Up", "Swipe Down", "Swipe Left", "Swipe Right", "Shake"];
-const actions = ["Call Police", "Call Ambulance", "Call Firefighters"];
+const actions = ["Call Police (911)", "Call Ambulance (912)", "Call Firefighters (913)"];
 const numbers = {
-  "Call Police": "tel:911",
-  "Call Ambulance": "tel:912",
-  "Call Firefighters": "tel:913",
+  "Call Police (911)": "tel:911",
+  "Call Ambulance (912)": "tel:912",
+  "Call Firefighters (913)": "tel:913",
 };
 
+// Countdown Circle Config
 const CIRCLE_SIZE = 80;
 const STROKE_WIDTH = 6;
 const RADIUS = (CIRCLE_SIZE - STROKE_WIDTH) / 2;
 const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
+const COUNTDOWN_DURATION = 3000; // 3 seconds in ms
 
 const PhysicalGestureSetupScreen = ({ navigation }) => {
   const [selectedGesture, setSelectedGesture] = useState(null);
   const [selectedAction, setSelectedAction] = useState(null);
   const [savedGestures, setSavedGestures] = useState([]);
-  const [countdown, setCountdown] = useState(0);
-  const [progress, setProgress] = useState(0);
-  const countdownRef = useRef(null);
+  const [countdown, setCountdown] = useState(0); // Time remaining in seconds
+  const [progress, setProgress] = useState(0); // Progress from 0 to 1
+  const countdownIntervalRef = useRef(null);
+  const startTimeRef = useRef(null);
 
-  const { isDarkMode } = useContext(ThemeContext); // ✅ Same as VoiceSetupScreen
+  const { isDarkMode } = useContext(ThemeContext);
 
-  useEffect(() => {
-    const loadGestures = async () => {
+  // --- Data Loading and Persistence ---
+  const loadGestures = async () => {
+    try {
       const saved = JSON.parse(await AsyncStorage.getItem("gestures")) || [];
       setSavedGestures(saved);
-    };
+    } catch (e) {
+      console.error("Failed to load gestures:", e);
+    }
+  };
+
+  useEffect(() => {
     loadGestures();
   }, []);
 
@@ -49,78 +61,155 @@ const PhysicalGestureSetupScreen = ({ navigation }) => {
       Alert.alert("Missing Info", "Please select both a gesture and an action.");
       return;
     }
+    
+    // Prevent duplicate gesture assignments
+    if (savedGestures.some(entry => entry.gesture === selectedGesture)) {
+        Alert.alert("Duplicate Gesture", `${selectedGesture} is already assigned. Please delete the existing assignment first.`);
+        return;
+    }
 
-    const newEntry = { gesture: selectedGesture, action: selectedAction };
+    const newEntry = { 
+        gesture: selectedGesture, 
+        action: selectedAction,
+        id: Date.now().toString() // Unique ID for key/deletion
+    };
     const updated = [...savedGestures, newEntry];
     await AsyncStorage.setItem("gestures", JSON.stringify(updated));
     setSavedGestures(updated);
     setSelectedGesture(null);
     setSelectedAction(null);
-    Alert.alert("Saved", "Gesture successfully saved!");
+    Alert.alert("Success", `Gesture ${selectedGesture} is now mapped to ${selectedAction}.`);
+  };
+
+  const deleteGesture = async (id) => {
+    Alert.alert(
+        "Confirm Delete",
+        "Are you sure you want to delete this saved gesture?",
+        [
+            { text: "Cancel", style: "cancel" },
+            {
+                text: "Delete",
+                onPress: async () => {
+                    const updated = savedGestures.filter(entry => entry.id !== id);
+                    await AsyncStorage.setItem("gestures", JSON.stringify(updated));
+                    setSavedGestures(updated);
+                    Alert.alert("Deleted", "Gesture successfully removed.");
+                }
+            }
+        ]
+    );
+  };
+  
+  // --- Live Detection and Countdown Logic (For this Screen's Test Feature) ---
+  
+  const clearCountdown = () => {
+      if (countdownIntervalRef.current) {
+          clearInterval(countdownIntervalRef.current);
+          countdownIntervalRef.current = null;
+      }
+      setCountdown(0);
+      setProgress(0);
+      startTimeRef.current = null;
   };
 
   const startCountdown = (entry) => {
+    // Clear any previous interval first
+    clearCountdown(); 
+
+    startTimeRef.current = Date.now();
     setCountdown(3);
     setProgress(0);
-    let secondsPassed = 0;
 
-    countdownRef.current = setInterval(() => {
-      secondsPassed += 0.1;
-      setProgress(secondsPassed / 3);
-      setCountdown((prev) => {
-        if (prev <= 0.1) {
-          clearInterval(countdownRef.current);
-          const number = numbers[entry.action];
-          if (number) Linking.openURL(number);
-          return 0;
+    countdownIntervalRef.current = setInterval(() => {
+        const elapsed = Date.now() - startTimeRef.current;
+        const remaining = Math.max(0, COUNTDOWN_DURATION - elapsed);
+        
+        const newProgress = elapsed / COUNTDOWN_DURATION;
+        setProgress(newProgress);
+        
+        // Update countdown text only on whole second changes
+        const newCountdown = Math.ceil(remaining / 1000);
+        setCountdown(newCountdown);
+
+        if (remaining <= 0) {
+            clearCountdown();
+            
+            // Trigger Action
+            const number = numbers[entry.action];
+            if (number) Linking.openURL(number);
+            else Alert.alert("Error", `Could not find number for action: ${entry.action}`);
         }
-        if (secondsPassed % 1 < 0.1) return prev - 1;
-        return prev;
-      });
-    }, 100);
+    }, 50); // High frequency update for smooth progress bar
   };
 
   const handleAccelerometerData = (data) => {
+    if (countdown > 0) return; // Ignore new gestures during countdown
+
     const { x, y, z } = data;
     let detected = null;
+    
+    // Normalize and detect motion
+    const shakeThreshold = 2.5; // Increased threshold for Shake
+    const swipeThreshold = 0.8; // Standard threshold for Swipes
+    
+    const magnitude = Math.sqrt(x*x + y*y + z*z);
 
-    if (Math.abs(x) > 1.5 || Math.abs(y) > 1.5 || Math.abs(z) > 1.5)
-      detected = "Shake";
-    else if (y < -0.7) detected = "Swipe Up";
-    else if (y > 0.7) detected = "Swipe Down";
-    else if (x < -0.7) detected = "Swipe Left";
-    else if (x > 0.7) detected = "Swipe Right";
+    if (magnitude > shakeThreshold) detected = "Shake";
+    else if (y < -swipeThreshold) detected = "Swipe Up";
+    else if (y > swipeThreshold) detected = "Swipe Down";
+    else if (x < -swipeThreshold) detected = "Swipe Left";
+    else if (x > swipeThreshold) detected = "Swipe Right";
 
     if (detected) {
       const match = savedGestures.find((e) => e.gesture === detected);
-      if (match && countdown === 0) startCountdown(match);
+      if (match && countdown === 0) {
+        // Only start countdown if a matched gesture is detected and no countdown is active
+        startCountdown(match);
+      }
     }
   };
 
   useEffect(() => {
+    // This useEffect is ONLY for testing the functionality on this screen.
     const subscription = Accelerometer.addListener(handleAccelerometerData);
-    Accelerometer.setUpdateInterval(300);
-    return () => subscription && subscription.remove();
-  }, [savedGestures, countdown]);
+    Accelerometer.setUpdateInterval(100); // 100ms update interval for responsiveness
+    return () => {
+      subscription && subscription.remove();
+      clearCountdown(); // Clear interval if component unmounts
+    }
+  }, [savedGestures, countdown]); // Re-subscribe if savedGestures change
+
+  // --- Render Functions ---
 
   const renderSaved = ({ item }) => (
     <View
       style={[
         styles.savedItem,
-        { backgroundColor: isDarkMode ? "#2C2C2C" : "#fff" },
+        { backgroundColor: isDarkMode ? "#2C2C2C" : "#f0f0f0" },
+        { borderColor: isDarkMode ? "#ff5c5c" : "#A83232", borderWidth: 1 }
       ]}
     >
       <Text
         style={[
           styles.savedText,
-          { color: isDarkMode ? "#fff" : "#A83232" },
+          { color: isDarkMode ? "#fff" : "#333" },
         ]}
       >
         {item.gesture} → {item.action}
       </Text>
+      <TouchableOpacity onPress={() => deleteGesture(item.id)} style={styles.deleteButton}>
+        <MaterialIcons name="delete-forever" size={24} color={isDarkMode ? "#ff5c5c" : "#A83232"} />
+      </TouchableOpacity>
     </View>
   );
 
+  const getButtonBackgroundColor = (isDarkMode, isSelected) => {
+      if (isSelected) {
+          return isDarkMode ? "#555" : "#ffb3b3";
+      }
+      return isDarkMode ? "#333" : "#f0f0f0";
+  };
+  
   return (
     <View
       style={[
@@ -131,14 +220,14 @@ const PhysicalGestureSetupScreen = ({ navigation }) => {
       <Text
         style={[
           styles.title,
-          { color: isDarkMode ? "#fff" : "#A83232" },
+          { color: isDarkMode ? "#ff5c5c" : "#A83232" },
         ]}
       >
         Physical Gesture Setup
       </Text>
 
       <Text style={[styles.sectionTitle, { color: isDarkMode ? "#fff" : "#A83232" }]}>
-        Select a Gesture
+        1. Select a Gesture
       </Text>
       <View style={styles.optionsRow}>
         {gestures.map((g) => (
@@ -146,16 +235,7 @@ const PhysicalGestureSetupScreen = ({ navigation }) => {
             key={g}
             style={[
               styles.optionButton,
-              {
-                backgroundColor:
-                  selectedGesture === g
-                    ? isDarkMode
-                      ? "#555"
-                      : "#ffb3b3"
-                    : isDarkMode
-                    ? "#333"
-                    : "#f0f0f0",
-              },
+              { backgroundColor: getButtonBackgroundColor(isDarkMode, selectedGesture === g) },
             ]}
             onPress={() => setSelectedGesture(g)}
           >
@@ -165,7 +245,7 @@ const PhysicalGestureSetupScreen = ({ navigation }) => {
       </View>
 
       <Text style={[styles.sectionTitle, { color: isDarkMode ? "#fff" : "#A83232" }]}>
-        Assign an Action
+        2. Assign an Action
       </Text>
       <View style={styles.optionsRow}>
         {actions.map((a) => (
@@ -173,16 +253,7 @@ const PhysicalGestureSetupScreen = ({ navigation }) => {
             key={a}
             style={[
               styles.optionButton,
-              {
-                backgroundColor:
-                  selectedAction === a
-                    ? isDarkMode
-                      ? "#555"
-                      : "#ffb3b3"
-                    : isDarkMode
-                    ? "#333"
-                    : "#f0f0f0",
-              },
+              { backgroundColor: getButtonBackgroundColor(isDarkMode, selectedAction === a) },
             ]}
             onPress={() => setSelectedAction(a)}
           >
@@ -194,58 +265,69 @@ const PhysicalGestureSetupScreen = ({ navigation }) => {
       <TouchableOpacity
         style={[
           styles.saveButton,
-          { backgroundColor: isDarkMode ? "#333" : "#A83232" },
+          { backgroundColor: isDarkMode ? "#ff5c5c" : "#A83232" },
         ]}
         onPress={saveGesture}
       >
-        <Text style={{ color: "#fff", fontWeight: "bold" }}>Save Gesture</Text>
+        <Text style={{ color: "#fff", fontWeight: "bold", fontSize: 16 }}>3. Save Assignment</Text>
       </TouchableOpacity>
 
+      {/* Countdown Visualization */}
       {countdown > 0 && (
-        <View style={styles.countdownContainer}>
-          <Svg width={CIRCLE_SIZE} height={CIRCLE_SIZE}>
-            <Circle
-              stroke={isDarkMode ? "#444" : "#ccc"}
-              cx={CIRCLE_SIZE / 2}
-              cy={CIRCLE_SIZE / 2}
-              r={RADIUS}
-              strokeWidth={STROKE_WIDTH}
-            />
-            <Circle
-              stroke={isDarkMode ? "#ff5c5c" : "#A83232"}
-              cx={CIRCLE_SIZE / 2}
-              cy={CIRCLE_SIZE / 2}
-              r={RADIUS}
-              strokeWidth={STROKE_WIDTH}
-              strokeDasharray={`${CIRCUMFERENCE}`}
-              strokeDashoffset={CIRCUMFERENCE * (1 - progress)}
-              strokeLinecap="round"
-            />
-          </Svg>
-          <Text
-            style={{
-              position: "absolute",
-              fontSize: 22,
-              fontWeight: "bold",
-              color: isDarkMode ? "#ff5c5c" : "#A83232",
-            }}
-          >
-            {countdown}
-          </Text>
+        <View style={styles.countdownWrapper}>
+            <View style={styles.countdownContainer}>
+                <Svg width={CIRCLE_SIZE} height={CIRCLE_SIZE} style={{ transform: [{ rotate: '-90deg' }] }}>
+                    {/* Background Circle */}
+                    <Circle
+                        stroke={isDarkMode ? "#444" : "#ccc"}
+                        cx={CIRCLE_SIZE / 2}
+                        cy={CIRCLE_SIZE / 2}
+                        r={RADIUS}
+                        strokeWidth={STROKE_WIDTH}
+                        fill="transparent"
+                    />
+                    {/* Progress Circle */}
+                    <Circle
+                        stroke={isDarkMode ? "#ff5c5c" : "#A83232"}
+                        cx={CIRCLE_SIZE / 2}
+                        cy={CIRCLE_SIZE / 2}
+                        r={RADIUS}
+                        strokeWidth={STROKE_WIDTH}
+                        strokeDasharray={`${CIRCUMFERENCE}`}
+                        strokeDashoffset={CIRCUMFERENCE * (1 - progress)}
+                        strokeLinecap="round"
+                        fill="transparent"
+                    />
+                </Svg>
+                <Text
+                    style={{
+                        position: "absolute",
+                        fontSize: 28,
+                        fontWeight: "bold",
+                        color: isDarkMode ? "#ff5c5c" : "#A83232",
+                    }}
+                >
+                    {countdown}
+                </Text>
+            </View>
+            <TouchableOpacity onPress={clearCountdown} style={styles.cancelButton}>
+                <Text style={{color: isDarkMode ? '#fff' : '#000'}}>Cancel Countdown</Text>
+            </TouchableOpacity>
         </View>
       )}
 
-      <Text style={[styles.sectionTitle, { color: isDarkMode ? "#fff" : "#A83232" }]}>
-        Saved Gestures
+      <Text style={[styles.sectionTitle, { color: isDarkMode ? "#fff" : "#A83232", marginTop: 20 }]}>
+        Saved Gestures (Try testing them now!)
       </Text>
       <FlatList
         data={savedGestures}
-        keyExtractor={(_, i) => i.toString()}
+        keyExtractor={(item) => item.id}
         renderItem={renderSaved}
+        style={{flexGrow: 0, maxHeight: 200}}
       />
 
       <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
-        <Text style={{ color: isDarkMode ? "#fff" : "#A83232", fontSize: 16 }}>⬅ Back</Text>
+        <Text style={{ color: isDarkMode ? "#fff" : "#A83232", fontSize: 16 }}>⬅ Back to Settings</Text>
       </TouchableOpacity>
     </View>
   );
@@ -255,35 +337,58 @@ export default PhysicalGestureSetupScreen;
 
 const styles = StyleSheet.create({
   container: { flex: 1, padding: 20 },
-  title: { fontSize: 24, fontWeight: "bold", textAlign: "center", marginBottom: 20 },
-  sectionTitle: { fontSize: 18, fontWeight: "bold", marginBottom: 10 },
-  optionsRow: { flexDirection: "row", flexWrap: "wrap", marginBottom: 15 },
+  title: { fontSize: 26, fontWeight: "bold", textAlign: "center", marginBottom: 30 },
+  sectionTitle: { fontSize: 18, fontWeight: "bold", marginBottom: 10, marginTop: 10 },
+  optionsRow: { flexDirection: "row", flexWrap: "wrap", marginBottom: 15, justifyContent: 'space-around' },
   optionButton: {
     padding: 12,
     borderRadius: 10,
-    margin: 5,
-    minWidth: "40%",
+    marginVertical: 5,
+    marginHorizontal: 2,
+    minWidth: "45%",
     alignItems: "center",
   },
   saveButton: {
     padding: 15,
     borderRadius: 10,
     alignItems: "center",
-    marginBottom: 20,
+    marginTop: 15,
+    shadowColor: '#A83232',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 5,
+    elevation: 8,
   },
   savedItem: {
-    padding: 12,
-    borderRadius: 10,
-    marginVertical: 4,
+    padding: 15,
+    borderRadius: 12,
+    marginVertical: 6,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
   },
-  savedText: { fontWeight: "bold" },
+  savedText: { fontWeight: "bold", flexShrink: 1, paddingRight: 10 },
+  deleteButton: { padding: 5 },
+  countdownWrapper: {
+      alignItems: 'center',
+      marginBottom: 20,
+      padding: 10,
+      borderRadius: 15,
+      backgroundColor: 'rgba(255, 0, 0, 0.05)', // Light red background for emphasis
+  },
   countdownContainer: {
     width: CIRCLE_SIZE,
     height: CIRCLE_SIZE,
     alignSelf: "center",
-    marginBottom: 15,
     justifyContent: "center",
     alignItems: "center",
+    marginBottom: 10,
   },
-  backButton: { alignItems: "center", marginTop: 10 },
+  cancelButton: {
+      marginTop: 5,
+      padding: 8,
+      borderRadius: 8,
+      backgroundColor: 'rgba(100, 100, 100, 0.2)',
+  },
+  backButton: { alignItems: "center", marginTop: 20 },
 });

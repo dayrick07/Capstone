@@ -9,7 +9,6 @@ export default function UserPageScreen({ navigation, route }) {
     navigation.replace("LoginScreen");
     return null;
   }
-// At the top, before your component
 const SERVER_URL = "http://192.168.0.111:3000"; // replace with your PC's local IP
 
   const [userData, setUserData] = useState(userDataFromRoute);

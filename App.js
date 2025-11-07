@@ -35,6 +35,7 @@ import RescuerSignupScreen from "./screens/RescuerSignupScreen";
 import RescuerHomeScreen from "./screens/RescuerHomeScreen";
 import RescuerPageScreen from "./screens/RescuerPageScreen";
 import IncidentMapScreen from "./screens/IncidentMapScreen";
+import RescuerHistoryScreen from "./screens/RescuerHistoryScreen";
 
 
 // Context & Global Listener
@@ -94,6 +95,7 @@ export default function App() {
           <Stack.Screen name="CreateContactScreen" component={CreateContactScreen} />
           <Stack.Screen name="RescuerHomeScreen" component={RescuerHomeScreen} />
           <Stack.Screen name="RescuerPageScreen" component={RescuerPageScreen} />
+          <Stack.Screen name="RescuerHistoryScreen" component={RescuerHistoryScreen} />
 
 
         </Stack.Navigator>

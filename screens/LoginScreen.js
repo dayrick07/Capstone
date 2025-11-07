@@ -36,7 +36,7 @@ export default function LoginScreen({ navigation }) {
         if (role === "User") {
           navigation.replace("DashboardScreen", { userData: user });
         } else {
-          navigation.replace("RescuerHomeScreen", { rescuerData: user });
+          navigation.replace("RescuerHomeScreen", { rescuerData:  response.data.rescuer });
         }
       } else {
         Alert.alert("Error", response.data.message || "Login failed");
