@@ -1,0 +1,457 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SafeKaFernandino Admin Dashboard</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+  <style>
+    body { background: #f8f9fa; }
+    .navbar { background-color: #007bff; }
+    .navbar-brand, .nav-link { color: #fff !important; }
+    .card { border-radius: 15px; box-shadow: 0 2px 6px rgba(0,0,0,0.1); }
+    table th { background-color: #007bff; color: white; cursor: pointer; }
+    .summary-card { text-align: center; padding: 20px; }
+    .summary-value { font-size: 1.8rem; font-weight: bold; color: #007bff; }
+    .filter-container select, .filter-container input { display: inline-block; width: auto; margin-left: 5px; }
+  </style>
+</head>
+<body>
+
+  <!-- 🔹 NAVBAR -->
+  <nav class="navbar navbar-expand-lg">
+    <div class="container-fluid">
+      <a class="navbar-brand fw-bold" href="#">🛠 SafeKaFernandino Admin</a>
+      <div class="d-flex align-items-center">
+        <span id="adminNameNav" class="text-white me-3"></span>
+        <button class="btn btn-light btn-sm me-2" id="btn-toggle-profile">Profile</button>
+        <button class="btn btn-light btn-sm me-2" onclick="loadData()">🔄 Refresh</button>
+        <button class="btn btn-danger btn-sm" onclick="logout()">Logout</button>
+      </div>
+    </div>
+  </nav>
+
+  <div class="container mt-4">
+
+    <!-- 🔹 ADMIN PROFILE (Hidden by default) -->
+    <div class="row mb-4" id="adminProfileCard" style="display:none">
+      <div class="col-md-12">
+        <div class="card p-3">
+          <h5>👤 Admin Profile</h5>
+          <p><strong>Name:</strong> <span id="adminName">Loading...</span></p>
+          <p><strong>Email:</strong> <span id="adminEmail">Loading...</span></p>
+          <p><strong>Mobile:</strong> <span id="adminMobile">Loading...</span></p>
+          <p><strong>Station:</strong> <span id="adminStation">Loading...</span></p>
+          <div class="d-flex mt-2">
+            <button class="btn btn-primary btn-sm me-2" id="btn-edit-profile">Edit Profile</button>
+            <button class="btn btn-success btn-sm me-2" id="btn-save-profile" style="display:none">Save Changes</button>
+            <button class="btn btn-secondary btn-sm" id="btn-cancel-profile" style="display:none">Cancel</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 🔹 DASHBOARD SUMMARY -->
+    <div class="row mb-4" id="summaryRow">
+      <div class="col-md-3">
+        <div class="card summary-card">
+          <div>Total Incidents</div>
+          <div id="totalIncidents" class="summary-value">0</div>
+        </div>
+      </div>
+      <div class="col-md-3">
+        <div class="card summary-card">
+          <div>Active Rescuers</div>
+          <div id="activeRescuers" class="summary-value">0</div>
+        </div>
+      </div>
+      <div class="col-md-3">
+        <div class="card summary-card">
+          <div>Pending Cases</div>
+          <div id="pendingCases" class="summary-value">0</div>
+        </div>
+      </div>
+      <div class="col-md-3">
+        <div class="card summary-card">
+          <div>Resolved Cases</div>
+          <div id="completedCases" class="summary-value">0</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 🔹 VIEW LOGGED-IN RESCUERS -->
+    <div class="row mb-4">
+      <div class="col-md-12">
+        <div class="card p-3">
+          <div class="d-flex justify-content-between align-items-center mb-3">
+            <h5>👨‍🚒 Active Rescuers</h5>
+            <button id="btn-show-rescuers" class="btn btn-success btn-sm">Refresh List</button>
+          </div>
+          <div id="rescuerListContainer">
+            <p>No data loaded yet.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 🔹 CHARTS -->
+    <div class="row mb-4">
+      <div class="col-md-4">
+        <div class="card">
+          <div class="card-header bg-info text-white fw-bold">📊 Incident Type Distribution</div>
+          <div class="card-body"><canvas id="typeChart"></canvas></div>
+        </div>
+      </div>
+      <div class="col-md-4">
+        <div class="card">
+          <div class="card-header bg-warning text-dark fw-bold">📈 Incident Status Overview</div>
+          <div class="card-body"><canvas id="statusChart"></canvas></div>
+        </div>
+      </div>
+      <div class="col-md-4">
+        <div class="card">
+          <div class="card-header bg-success text-white fw-bold">📉 Incidents Over Time</div>
+          <div class="card-body"><canvas id="lineChart"></canvas></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 🔹 FILTERS + INCIDENT HISTORY -->
+    <div class="card">
+      <div class="card-header bg-primary text-white fw-bold d-flex justify-content-between align-items-center">
+        🧾 Incident History
+        <div class="filter-container">
+          <label>Status:</label>
+          <select id="statusFilter" class="form-select form-select-sm">
+            <option value="">All</option>
+            <option value="Pending">Pending</option>
+            <option value="Accepted">Accepted</option>
+            <option value="Resolved">Resolved</option>
+          </select>
+
+          <label>Barangay:</label>
+          <select id="barangayFilter" class="form-select form-select-sm">
+            <option value="">All</option>
+            <option>Alasas</option>
+            <option>Baliti</option>
+            <option>Bulaon</option>
+            <option>Calulut</option>
+            <option>Dela Paz Norte</option>
+            <option>Dela Paz Sur</option>
+            <option>Del Carmen</option>
+            <option>Del Pilar</option>
+            <option>Del Rosario</option>
+            <option>Dolores</option>
+            <option>Juliana</option>
+            <option>Lara</option>
+            <option>Lourdes</option>
+            <option>Magliman</option>
+            <option>Maimpis</option>
+            <option>Malino</option>
+            <option>Malpitic</option>
+            <option>Pandaras</option>
+            <option>Panipuan</option>
+            <option>Quebiawan</option>
+            <option>Saguin</option>
+            <option>San Agustin</option>
+            <option>San Felipe</option>
+            <option>San Isidro</option>
+            <option>San Jose</option>
+            <option>San Juan</option>
+            <option>San Nicolas</option>
+            <option>San Pedro Cutud</option>
+            <option>Santa Lucia</option>
+            <option>Santa Teresita</option>
+            <option>Santo Niño</option>
+            <option>Santo Rosario (Poblacion)</option>
+            <option>Sindalan</option>
+            <option>Telabastagan</option>
+          </select>
+
+          <label>Date Range:</label>
+          <select id="dateFilter" class="form-select form-select-sm">
+            <option value="">All</option>
+            <option value="week">This Week</option>
+            <option value="month">This Month</option>
+            <option value="custom">Custom</option>
+          </select>
+
+          <input type="date" id="startDate" class="form-control form-control-sm d-none">
+          <input type="date" id="endDate" class="form-control form-control-sm d-none">
+        </div>
+      </div>
+      <div class="card-body">
+        <table class="table table-striped" id="incidentTable">
+          <thead>
+            <tr>
+              <th onclick="sortTable('Id')">ID</th>
+              <th onclick="sortTable('Type')">Type</th>
+              <th onclick="sortTable('Location')">Location</th>
+              <th onclick="sortTable('Status')">Status</th>
+              <th onclick="sortTable('UserId')">UserId</th>
+              <th onclick="sortTable('RescuerId')">RescuerId</th>
+              <th onclick="sortTable('CreatedAt')">CreatedAt</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- 🔹 MAP MODAL -->
+  <div class="modal fade" id="mapModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">Incident Location</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <iframe id="mapFrame" width="100%" height="400" style="border:0;" allowfullscreen="" loading="lazy"></iframe>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const SERVER_URL = "http://localhost:3000";
+    let allIncidents = [];
+    let sortOrder = { column: null, ascending: true };
+
+    // 🔹 ADMIN PROFILE
+    async function loadAdminProfile() {
+      try {
+        const res = await fetch(`${SERVER_URL}/admins/me`, {
+          headers: { "Authorization": `Bearer ${localStorage.getItem("token")}` }
+        });
+        const data = await res.json();
+        if (data.success) {
+          document.getElementById("adminName").textContent = data.admin.Name;
+          document.getElementById("adminEmail").textContent = data.admin.Email;
+          document.getElementById("adminMobile").textContent = data.admin.Mobile || 'N/A';
+          document.getElementById("adminStation").textContent = data.admin.StationLocation || 'N/A';
+          document.getElementById("adminNameNav").textContent = data.admin.Name;
+        }
+      } catch (err) { console.error(err); }
+    }
+
+    // 🔹 Profile Button Click
+    document.getElementById("btn-toggle-profile").addEventListener("click", () => {
+      const profile = document.getElementById("adminProfileCard");
+      const isHidden = profile.style.display === "none";
+      profile.style.display = isHidden ? "block" : "none";
+      if (isHidden) loadAdminProfile(); // only load when showing
+    });
+
+    function logout() {
+      localStorage.removeItem("token");
+      window.location.href = "admin-login";
+    }
+
+    // 🔹 RESCUERS
+    async function showActiveRescuers() {
+      try {
+        const res = await fetch(`${SERVER_URL}/rescuer/active`);
+        const data = await res.json();
+        const container = document.getElementById("rescuerListContainer");
+        container.innerHTML = "";
+        if (!data || data.length === 0) {
+          container.innerHTML = "<p>No rescuers are currently logged in.</p>";
+          return;
+        }
+        data.forEach(rescuer => {
+          const rescuerDiv = document.createElement("div");
+          rescuerDiv.classList.add("border", "p-2", "mb-2", "rounded");
+          rescuerDiv.innerHTML = `
+            <strong>${rescuer.Name}</strong> | Email: ${rescuer.Email} | Role: 
+            <select>
+              <option value="Ambulance">Ambulance</option>
+              <option value="Fire Station">Fire Station</option>
+              <option value="Police">Police</option>
+            </select> 
+            | Mobile: ${rescuer.Mobile || 'N/A'} | Station: ${rescuer.StationLocation || 'N/A'}
+          `;
+          container.appendChild(rescuerDiv);
+        });
+        document.getElementById("activeRescuers").textContent = data.length;
+      } catch (err) {
+        console.error(err);
+        document.getElementById("rescuerListContainer").innerHTML = "<p class='text-danger'>Failed to load active rescuers.</p>";
+      }
+    }
+
+    document.getElementById("btn-show-rescuers").addEventListener("click", showActiveRescuers);
+
+    // 🔹 INCIDENTS
+    async function loadIncidents() {
+      const table = document.querySelector("#incidentTable tbody");
+      table.innerHTML = "<tr><td colspan='7'>Loading...</td></tr>";
+      try {
+        const res = await fetch(`${SERVER_URL}/incidents`);
+        const data = await res.json();
+        if (!data.success) throw new Error("Failed to fetch incidents");
+        allIncidents = data.incidents;
+        applyFilters();
+      } catch (err) {
+        console.error(err);
+        table.innerHTML = `<tr><td colspan='7' class='text-danger'>Error loading incidents</td></tr>`;
+      }
+    }
+
+    function applyFilters() {
+      const status = document.getElementById("statusFilter").value;
+      const barangay = document.getElementById("barangayFilter").value.toLowerCase();
+      const dateRange = document.getElementById("dateFilter").value;
+      const startDate = document.getElementById("startDate").value ? new Date(document.getElementById("startDate").value) : null;
+      const endDate = document.getElementById("endDate").value ? new Date(document.getElementById("endDate").value) : null;
+
+      let filtered = allIncidents.filter(i => {
+        let statusMatch = !status || i.Status === status;
+        let barangayMatch = !barangay || (i.Location && i.Location.toLowerCase().includes(barangay));
+        let dateMatch = true;
+        const createdAt = new Date(i.CreatedAt);
+
+        if (dateRange === "week") {
+          const now = new Date();
+          const weekStart = new Date(now.setDate(now.getDate() - now.getDay()));
+          dateMatch = createdAt >= weekStart;
+        } else if (dateRange === "month") {
+          const now = new Date();
+          dateMatch = createdAt.getMonth() === now.getMonth() && createdAt.getFullYear() === now.getFullYear();
+        } else if (dateRange === "custom" && startDate && endDate) {
+          dateMatch = createdAt >= startDate && createdAt <= endDate;
+        }
+        return statusMatch && barangayMatch && dateMatch;
+      });
+
+      if (sortOrder.column) {
+        filtered.sort((a,b) => {
+          const valA = a[sortOrder.column];
+          const valB = b[sortOrder.column];
+          if (valA < valB) return sortOrder.ascending ? -1 : 1;
+          if (valA > valB) return sortOrder.ascending ? 1 : -1;
+          return 0;
+        });
+      }
+
+      updateSummary(filtered);
+      renderTable(filtered);
+      renderCharts(filtered);
+      renderLineChart(filtered);
+    }
+
+    function sortTable(column) {
+      if (sortOrder.column === column) sortOrder.ascending = !sortOrder.ascending;
+      else { sortOrder.column = column; sortOrder.ascending = true; }
+      applyFilters();
+    }
+
+    function updateSummary(incidents) {
+      document.getElementById("totalIncidents").textContent = incidents.length;
+      document.getElementById("pendingCases").textContent = incidents.filter(i => i.Status === "Pending").length;
+      document.getElementById("completedCases").textContent = incidents.filter(i => i.Status === "Resolved").length;
+    }
+
+    function renderTable(incidents) {
+      const table = document.querySelector("#incidentTable tbody");
+      table.innerHTML = incidents.map(i => `
+        <tr onclick="showIncidentMap('${i.Location}', ${i.Latitude}, ${i.Longitude})" style="cursor:pointer;">
+          <td>${i.Id}</td>
+          <td>${i.Type}</td>
+          <td>${i.Location}</td>
+          <td>${i.Status}</td>
+          <td>${i.UserId}</td>
+          <td>${i.RescuerId || '—'}</td>
+          <td>${new Date(i.CreatedAt).toLocaleString()}</td>
+        </tr>
+      `).join('') || "<tr><td colspan='7'>No records found</td></tr>";
+    }
+
+    // 🔹 FIXED MAP FUNCTION
+    function showIncidentMap(location, lat, lng) {
+      const mapFrame = document.getElementById("mapFrame");
+
+      if (lat && lng) {
+        const latitude = parseFloat(lat);
+        const longitude = parseFloat(lng);
+        mapFrame.src = `https://www.google.com/maps?q=${latitude},${longitude}&hl=en&z=15&output=embed`;
+      } else {
+        mapFrame.src = `https://www.google.com/maps?q=${encodeURIComponent(location)}&hl=en&z=15&output=embed`;
+      }
+
+      const mapModal = new bootstrap.Modal(document.getElementById("mapModal"));
+      mapModal.show();
+    }
+
+    function renderCharts(incidents) {
+      const typeCounts = {};
+      const statusCounts = {};
+
+      incidents.forEach(i => {
+        typeCounts[i.Type] = (typeCounts[i.Type] || 0) + 1;
+        statusCounts[i.Status] = (statusCounts[i.Status] || 0) + 1;
+      });
+
+      if (window.typeChartInstance) window.typeChartInstance.destroy();
+      if (window.statusChartInstance) window.statusChartInstance.destroy();
+
+      window.typeChartInstance = new Chart(document.getElementById("typeChart"), {
+        type: 'pie',
+        data: { labels: Object.keys(typeCounts), datasets: [{ data: Object.values(typeCounts), backgroundColor: ['#007bff','#28a745','#ffc107','#dc3545','#17a2b8'] }] }
+      });
+
+      window.statusChartInstance = new Chart(document.getElementById("statusChart"), {
+        type: 'bar',
+        data: { labels: Object.keys(statusCounts), datasets: [{ label: 'Number of Incidents', data: Object.values(statusCounts), backgroundColor: ['#ffc107','#007bff','#28a745'] }] },
+        options: { scales: { y: { beginAtZero: true } } }
+      });
+    }
+
+    function renderLineChart(incidents) {
+      const countsByDate = {};
+      incidents.forEach(i => {
+        const date = new Date(i.CreatedAt).toLocaleDateString();
+        countsByDate[date] = (countsByDate[date] || 0) + 1;
+      });
+      const labels = Object.keys(countsByDate).sort((a,b) => new Date(a)-new Date(b));
+      const data = labels.map(d => countsByDate[d]);
+
+      if (window.lineChartInstance) window.lineChartInstance.destroy();
+
+      window.lineChartInstance = new Chart(document.getElementById("lineChart"), {
+        type: 'line',
+        data: { labels, datasets: [{ label:'Incidents per Day', data, borderColor:'#007bff', backgroundColor:'rgba(0,123,255,0.2)', tension:0.3, fill:true }] },
+        options: { scales: { y: { beginAtZero:true } } }
+      });
+    }
+
+    // 🔹 EVENT LISTENERS
+    document.getElementById("statusFilter").addEventListener("change", applyFilters);
+    document.getElementById("barangayFilter").addEventListener("change", applyFilters);
+    document.getElementById("dateFilter").addEventListener("change", () => {
+      const value = document.getElementById("dateFilter").value;
+      const startInput = document.getElementById("startDate");
+      const endInput = document.getElementById("endDate");
+      if (value === "custom") { startInput.classList.remove("d-none"); endInput.classList.remove("d-none"); }
+      else { startInput.classList.add("d-none"); endInput.classList.add("d-none"); }
+      applyFilters();
+    });
+    document.getElementById("startDate").addEventListener("change", applyFilters);
+    document.getElementById("endDate").addEventListener("change", applyFilters);
+
+    // 🔹 LOAD ALL DATA
+    function loadData() {
+      showActiveRescuers();
+      loadIncidents();
+    }
+
+    setInterval(loadData, 10000);
+    loadData();
+  </script>
+
+</body>
+</html>

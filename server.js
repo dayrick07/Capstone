@@ -4,6 +4,9 @@ const bodyParser = require('body-parser');
 const cors = require('cors');
 const sql = require('mssql');
 const bcrypt = require('bcryptjs');
+const path = require('path');
+
+
 
 const app = express();
 app.use(cors());
@@ -115,6 +118,44 @@ app.post('/rescuers/signup', async (req, res) => {
     console.error('❌ Rescuer Signup Error:', err);
     res.status(500).send({ success: false, error: err.message });
   }
+});
+// ---------------- 🧍‍♂️ Admins SIGNUP ----------------
+app.post('/admins/signup', async (req, res) => {
+    const { name, email, password, gender, mobile, language, birthdate, address } = req.body;
+
+    if (!name || !email || !password) {
+        return res.status(400).json({ success: false, message: 'Name, email, and password are required.' });
+    }
+
+    try {
+        const hashedPassword = await bcrypt.hash(password, 10);
+        const pool = await getPool();
+
+        await pool.request()
+            .input('Name', sql.NVarChar, name)
+            .input('Email', sql.NVarChar, email)
+            .input('PasswordHash', sql.NVarChar, hashedPassword)
+            .input('Gender', sql.NVarChar, gender)
+            .input('Mobile', sql.NVarChar, mobile)
+            .input('Language', sql.NVarChar, language)
+            .input('Birthdate', sql.Date, birthdate)
+            .input('Address', sql.NVarChar, address)
+            .query(`
+                INSERT INTO Admins 
+                (Name, Email, PasswordHash, Gender, Mobile, Language, Birthdate, Address)
+                VALUES 
+                (@Name, @Email, @PasswordHash, @Gender, @Mobile, @Language, @Birthdate, @Address)
+            `);
+
+        res.json({ success: true, message: 'Admin registered successfully!' });
+    } catch (err) {
+        console.error(err);
+        if(err.number === 2627){ // duplicate email
+            res.status(400).json({ success: false, message: 'Email already exists!' });
+        } else {
+            res.status(500).json({ success: false, message: 'Server error.' });
+        }
+    }
 });
 
 // ---------------- 🔑 USER LOGIN ----------------
@@ -267,6 +308,51 @@ app.put('/rescuers/update/:id', async (req, res) => {
     res.status(500).send({ success: false, error: err.message });
   }
 });
+// ---------------- ⚡ Admin Login ----------------
+app.post('/admins/login', async (req, res) => {
+    const { email, password } = req.body;
+
+    if (!email || !password) return res.status(400).json({ success: false, message: 'Email and password required.' });
+
+    try {
+        const pool = await getPool();
+        const result = await pool.request()
+            .input('Email', sql.NVarChar, email)
+            .query('SELECT * FROM Admins WHERE Email = @Email AND IsActive = 1');
+
+        const admin = result.recordset[0];
+        if (!admin) return res.status(404).json({ success: false, message: 'Admin not found or inactive.' });
+
+        const validPassword = await bcrypt.compare(password, admin.PasswordHash);
+        if (!validPassword) return res.status(401).json({ success: false, message: 'Incorrect password.' });
+
+        res.json({ success: true, message: 'Login successful!', admin });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ success: false, message: 'Server error.' });
+    }
+});
+// ---------------- fetch ADMIN PROFILE ----------------
+app.get('/admins/:id', async (req, res) => {
+    const adminId = parseInt(req.params.id);
+    if (isNaN(adminId)) return res.status(400).json({ success: false, message: "Invalid admin ID" });
+
+    try {
+        const pool = await getPool();
+        const result = await pool.request()
+            .input('Id', sql.Int, adminId)
+            .query('SELECT Id, Name, Email, Gender, Mobile, Language, Birthdate, Address FROM Admins WHERE Id = @Id AND IsActive = 1');
+
+        const admin = result.recordset[0];
+        if (!admin) return res.status(404).json({ success: false, message: "Admin not found or inactive" });
+
+        res.json({ success: true, admin });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ success: false, message: "Server error" });
+    }
+});
+
 
 // ---------------- 📍 FETCH ALL STATIONS ----------------
 app.get('/stations', async (req, res) => {
@@ -285,7 +371,6 @@ app.get('/stations', async (req, res) => {
     res.status(500).send({ success: false, error: err.message });
   }
 });
-
 // ---------------- 🚨 CREATE INCIDENT ----------------
 app.post('/incidents', async (req, res) => {
   const { Type, Location, Latitude, Longitude, Status, UserId } = req.body;
@@ -315,9 +400,6 @@ app.post('/incidents', async (req, res) => {
     res.status(500).send({ success: false, error: err.message });
   }
 });
-
-
-
 // ---------------- 📄 FETCH INCIDENTS ----------------
 app.get('/incidents', async (req, res) => {
   try {
@@ -329,7 +411,6 @@ app.get('/incidents', async (req, res) => {
     res.status(500).send({ success: false, error: err.message });
   }
 });
-
 // ---------------- ⚡ UPDATE INCIDENT STATUS (FIXED) ----------------
 app.put('/incidents/:id/status', async (req, res) => {
   const incidentId = parseInt(req.params.id);
@@ -365,8 +446,6 @@ app.put('/incidents/:id/status', async (req, res) => {
     res.status(500).json({ success: false, error: err.message });
   }
 });
-
-
 // ---------------- 📄 FETCH RESCUER HISTORY (New Feature) ----------------
 app.get('/rescuers/:id/history', async (req, res) => {
   const rescuerId = parseInt(req.params.id);
@@ -391,10 +470,7 @@ app.get('/rescuers/:id/history', async (req, res) => {
     res.status(500).send({ success: false, error: err.message });
   }
 });
-
-
 // ---------------- 📞 EMERGENCY CONTACTS ----------------
-
 // Create a new contact
 app.post('/contacts', async (req, res) => {
   const { Name, Relationship, Phone, UserId } = req.body;
@@ -419,7 +495,6 @@ app.post('/contacts', async (req, res) => {
     res.status(500).send({ success: false, error: err.message });
   }
 });
-
 // Fetch all contacts for a user
 app.get('/contacts/:userId', async (req, res) => {
   const userId = parseInt(req.params.userId);
@@ -437,7 +512,6 @@ app.get('/contacts/:userId', async (req, res) => {
     res.status(500).send({ success: false, error: err.message });
   }
 });
-
 // Update an existing contact
 app.put('/contacts/:id', async (req, res) => {
   const contactId = parseInt(req.params.id);
@@ -470,7 +544,6 @@ app.put('/contacts/:id', async (req, res) => {
     res.status(500).send({ success: false, error: err.message });
   }
 });
-
 // Delete a contact
 app.delete('/contacts/:id', async (req, res) => {
   const contactId = parseInt(req.params.id);
@@ -575,13 +648,14 @@ app.get('/children/:userId', async (req, res) => {
 // ---------------- ACTIVE RESCUERS ----------------
 app.get('/rescuer/active', async (req, res) => {
   try {
-    const result = await sql.query`
-      SELECT * FROM Rescuers WHERE IsActive = 1
-    `;
-    res.send(result.recordset);
+    const pool = await getPool();
+    const result = await pool.request()
+      .query('SELECT * FROM Rescuers WHERE IsActive = 1');
+
+    res.json(result.recordset);
   } catch (error) {
     console.error('❌ Error fetching active rescuers:', error);
-    res.status(500).send({ message: 'Error fetching active rescuers' });
+    res.status(500).json({ message: 'Error fetching active rescuers' });
   }
 });
 
@@ -598,10 +672,20 @@ app.get('/incidents', async (req, res) => {
     res.status(500).send({ success: false, message: 'Database error' });
   }
 });
+// ---------------- 🟢 ROUTES FOR WEB PAGES ----------------
+app.use(express.static(path.join(__dirname, 'public')));
+// Admin login/signup page
+app.get('/admin-login', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'admin-login-signup.html'));
+});
 
-// ---------- Root ----------
+// Dashboard page
+app.get('/admin-dashboard', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'admin-dashboard.html'));
+});
+// Optional: redirect root to admin login
 app.get('/', (req, res) => {
-  res.sendFile(__dirname + '/public/index.html');
+  res.redirect('/admin-login');
 });
 
 // ---------------- ⚙️ START SERVER ----------------
