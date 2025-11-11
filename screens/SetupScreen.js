@@ -4,23 +4,31 @@ import {
   Text,
   TouchableOpacity,
   StyleSheet,
+  SafeAreaView, 
+  Platform, 
+  StatusBar, 
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { ThemeContext } from "../ThemeContext"; // adjust path
+import { ThemeContext } from "../ThemeContext";
 
-const SetupScreen = ({ navigation }) => {
+const SetupScreen = ({ navigation, route }) => {
+  // Ensure route.params exists before destructuring
+  const { userData } = route.params || {}; 
   const { isDarkMode, toggleTheme } = useContext(ThemeContext);
+
+  const primaryColor = "#A83232";
 
   const theme = {
     background: isDarkMode ? "#121212" : "#FFFFFF",
     text: isDarkMode ? "#FFFFFF" : "#000000",
-    header: "#A83232",
+    header: primaryColor,
     buttonBackground: isDarkMode ? "#1E1E1E" : "#FFFFFF",
-    buttonText: isDarkMode ? "#FFFFFF" : "#A83232",
+    buttonText: isDarkMode ? primaryColor : primaryColor, // Use primary color for button text in light mode
+    buttonBorder: isDarkMode ? "#333333" : "#E0E0E0",
   };
 
   return (
-    <View style={[styles.container, { backgroundColor: theme.background }]}>
+    <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.background }]}>
       {/* Header */}
       <View style={[styles.topBar, { backgroundColor: theme.header }]}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
@@ -37,45 +45,88 @@ const SetupScreen = ({ navigation }) => {
           />
         </TouchableOpacity>
       </View>
+      
+      <View style={styles.content}>
+        {/* Title */}
+        <Text style={[styles.title, { color: theme.header }]}>Choose Setup Type</Text>
+        <Text style={[styles.subtitle, { color: theme.text }]}>
+            Select a method to set up security for a new child device.
+        </Text>
 
-      {/* Title */}
-      <Text style={[styles.title, { color: theme.header }]}>Choose Setup Type</Text>
+        {/* Setup Option: Voice Setup */}
+        <TouchableOpacity
+          style={[
+            styles.optionButton, 
+            { 
+              backgroundColor: theme.buttonBackground,
+              borderColor: theme.buttonBorder,
+            }
+          ]}
+          onPress={() => navigation.navigate("VoiceSetupScreen", { parentId: userData?.Id })}
+        >
+          <Ionicons name="mic-outline" size={28} color={theme.buttonText} style={styles.optionIcon} />
+          <Text style={[styles.optionText, { color: theme.buttonText }]}>
+            Voice Setup
+          </Text>
+        </TouchableOpacity>
 
-      {/* Setup Options */}
-      <TouchableOpacity
-        style={[styles.optionButton, { backgroundColor: theme.buttonBackground }]}
-        onPress={() => navigation.navigate("VoiceSetupScreen")}
-      >
-        <Text style={[styles.optionText, { color: theme.buttonText }]}>🎙 Voice Setup</Text>
-      </TouchableOpacity>
+        {/* Setup Option: Physical Gesture Setup */}
+        <TouchableOpacity
+          style={[
+            styles.optionButton, 
+            { 
+              backgroundColor: theme.buttonBackground,
+              borderColor: theme.buttonBorder,
+            }
+          ]}
+          onPress={() => navigation.navigate("PhysicalGestureSetupScreen", { userData })}
+        >
+          <Ionicons name="hand-right-outline" size={28} color={theme.buttonText} style={styles.optionIcon} />
+          <Text style={[styles.optionText, { color: theme.buttonText }]}>
+            Physical Gesture Setup
+          </Text>
+        </TouchableOpacity>
 
-      <TouchableOpacity
-        style={[styles.optionButton, { backgroundColor: theme.buttonBackground }]}
-        onPress={() => navigation.navigate("PhysicalGestureSetupScreen")}
-      >
-        <Text style={[styles.optionText, { color: theme.buttonText }]}>✋ Physical Gesture Setup</Text>
-      </TouchableOpacity>
+        {/* Setup Option: Create Child Account (Restored) */}
+        <TouchableOpacity
+          style={[
+            styles.optionButton, 
+            { 
+              backgroundColor: theme.buttonBackground,
+              borderColor: theme.buttonBorder,
+              marginBottom: 50, 
+            }
+          ]}
+          onPress={() => navigation.navigate("ChildSignupScreen", { parentId: userData?.Id })}
+        >
+          <Ionicons name="person-add-outline" size={28} color={theme.buttonText} style={styles.optionIcon} />
+          <Text style={[styles.optionText, { color: theme.buttonText }]}>
+            Create Child Account
+          </Text>
+        </TouchableOpacity>
+      </View>
 
-      <TouchableOpacity
-        style={[styles.optionButton, { backgroundColor: theme.buttonBackground }]}
-        onPress={() => navigation.navigate("ParentalSetupScreen")}
-      >
-        <Text style={[styles.optionText, { color: theme.buttonText }]}>👨‍👩‍👧 Parental Setup</Text>
-      </TouchableOpacity>
-
-      {/* Home Button */}
+      {/* Home Button (Fixed positioning) */}
       <View style={styles.homeContainer}>
         <TouchableOpacity onPress={() => navigation.navigate("DashboardScreen")}>
           <Ionicons name="home-outline" size={32} color={theme.header} />
           <Text style={[styles.homeText, { color: theme.text }]}>Home</Text>
         </TouchableOpacity>
       </View>
-    </View>
+    </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, alignItems: "center", paddingTop: 40 },
+  safeArea: {
+    flex: 1,
+    paddingTop: Platform.OS === "android" ? StatusBar.currentHeight : 0, 
+  },
+  content: {
+    flex: 1, 
+    alignItems: "center", 
+    paddingHorizontal: 20
+  },
   topBar: {
     flexDirection: "row",
     alignItems: "center",
@@ -87,18 +138,43 @@ const styles = StyleSheet.create({
   backButton: { flexDirection: "row", alignItems: "center" },
   backText: { color: "#fff", marginLeft: 5, fontSize: 16, fontWeight: "500" },
   themeToggle: { padding: 5 },
-  title: { fontSize: 24, fontWeight: "bold", marginVertical: 30 },
+
+  // Titles
+  title: { fontSize: 26, fontWeight: "bold", marginTop: 20, marginBottom: 10, textAlign: 'center' },
+  subtitle: { fontSize: 15, textAlign: 'center', marginBottom: 40, color: '#555' }, 
+
+  // Option Buttons
   optionButton: {
-    paddingVertical: 15,
-    paddingHorizontal: 30,
-    borderRadius: 12,
-    marginVertical: 10,
-    width: "80%",
+    flexDirection: 'row',
     alignItems: "center",
-    elevation: 4,
+    paddingVertical: 20,
+    paddingHorizontal: 30,
+    borderRadius: 15,
+    marginVertical: 10,
+    width: "100%",
+    borderWidth: 1,
+    elevation: 3,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
   },
-  optionText: { fontSize: 16, fontWeight: "bold" },
-  homeContainer: { position: "absolute", bottom: 40, alignItems: "center" },
+  optionIcon: {
+      marginRight: 15,
+  },
+  optionText: { 
+    fontSize: 17, 
+    fontWeight: "600",
+    flex: 1, 
+  },
+
+  // Home Button
+  homeContainer: { 
+    position: "absolute", 
+    bottom: 40, 
+    alignSelf: 'center',
+    alignItems: "center" 
+  },
   homeText: { fontSize: 14, marginTop: 5 },
 });
 

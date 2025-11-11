@@ -19,6 +19,7 @@
         "NSMicrophoneUsageDescription": "This app needs microphone access to record audio with video",
         "NSPhotoLibraryAddUsageDescription": "This app needs access to save videos to your photo library",
         "NSPhotoLibraryUsageDescription": "This app needs access to load videos from your photo library"
+        
       }
     },
     "android": {
@@ -28,14 +29,14 @@
       },
       "edgeToEdgeEnabled": true,
       "package": "com.alfonsose7.Safekafe",
-      "android": {
-        "permissions": [
-          "CAMERA",
-          "RECORD_AUDIO",
-          "WRITE_EXTERNAL_STORAGE",
-          "READ_EXTERNAL_STORAGE"
-        ]
-      }
+      "permissions": [
+  "CAMERA",
+  "RECORD_AUDIO",
+  "WRITE_EXTERNAL_STORAGE",
+  "READ_EXTERNAL_STORAGE",
+  "BODY_SENSORS"
+]
+
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -47,7 +48,35 @@
     },
     "plugins": [
       "expo-audio",
-      "expo-video"
+      "expo-video",
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "kotlinVersion": "2.1.20", 
+            "compileSdkVersion": 35,
+            "targetSdkVersion": 35,
+            "minSdkVersion": 24,
+            "playServicesMapsVersion": "18.1.0",
+            "playServicesLocationVersion": "21.0.1",
+            "androidXLegacySupport": true,
+            "forceJetify": true,
+            "manifestPlaceholders": {
+              "appComponentFactory": "tools:replace=\"android:appComponentFactory\""
+            },
+            "extraGradleArgs": [
+              "-Pandroid.enableJetifier=true",
+              "-Pandroid.useAndroidX=true"
+            ],
+            "extraMavenRepos": [
+              "allprojects.configurations.all { resolutionStrategy.force 'androidx.core:core:1.16.0' }",
+              "allprojects.configurations.all { exclude group: 'com.android.support', module: 'support-compat' }",
+              "allprojects.configurations.all { exclude group: 'com.android.support', module: 'versionedparcelable' }"
+            ]
+
+          }
+        }
+      ]
     ]
   }
 }

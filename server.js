@@ -1,12 +1,10 @@
-// ----------------------- server.js -----------------------
 const express = require('express');
 const bodyParser = require('body-parser');
 const cors = require('cors');
 const sql = require('mssql');
 const bcrypt = require('bcryptjs');
 const path = require('path');
-
-
+const { generateOTP } = require('./generate_otp'); 
 
 const app = express();
 app.use(cors());
@@ -72,6 +70,38 @@ app.post('/users/signup', async (req, res) => {
         res.status(500).json({ success: false, message: 'Server error.' });
     }
 });
+// ---------------- 🧒 CHILD SIGNUP ----------------
+app.post('/children/signup', async (req, res) => {
+  const { parentId, name, email, password, gender, birthdate } = req.body;
+
+  if (!parentId || !name || !email || !password) {
+    return res.status(400).json({ success: false, message: 'Missing required fields.' });
+  }
+
+  try {
+    const hashedPassword = await bcrypt.hash(password, 10);
+    const pool = await getPool();
+
+    await pool.request()
+      .input('ParentId', sql.Int, parentId)
+      .input('Name', sql.NVarChar, name)
+      .input('Email', sql.NVarChar, email)
+      .input('PasswordHash', sql.NVarChar, hashedPassword)
+      .input('Gender', sql.NVarChar, gender || null)
+      .input('Birthdate', sql.Date, birthdate || null)
+      .query(`
+        INSERT INTO Children (ParentId, Name, Email, PasswordHash, Gender, Birthdate, CreatedAt)
+        VALUES (@ParentId, @Name, @Email, @PasswordHash, @Gender, @Birthdate, GETDATE())
+      `);
+
+    res.json({ success: true, message: 'Child account created successfully.' });
+  } catch (err) {
+    console.error('❌ Child Signup Error:', err);
+    res.status(500).json({ success: false, message: 'Server error during child signup.' });
+  }
+});
+
+
 
 // ---------------- 🧍‍♂️ RESCUER SIGNUP ----------------
 app.post('/rescuers/signup', async (req, res) => {
@@ -121,43 +151,135 @@ app.post('/rescuers/signup', async (req, res) => {
 });
 // ---------------- 🧍‍♂️ Admins SIGNUP ----------------
 app.post('/admins/signup', async (req, res) => {
-    const { name, email, password, gender, mobile, language, birthdate, address } = req.body;
+    const { name, email, password, gender, mobile, language, birthdate, address } = req.body;
 
-    if (!name || !email || !password) {
-        return res.status(400).json({ success: false, message: 'Name, email, and password are required.' });
-    }
+    if (!name || !email || !password) {
+        return res.status(400).json({ success: false, message: 'Name, email, and password are required.' });
+    }
 
-    try {
-        const hashedPassword = await bcrypt.hash(password, 10);
-        const pool = await getPool();
+    try {
+        const hashedPassword = await bcrypt.hash(password, 10);
+        const pool = await getPool();
 
-        await pool.request()
-            .input('Name', sql.NVarChar, name)
-            .input('Email', sql.NVarChar, email)
-            .input('PasswordHash', sql.NVarChar, hashedPassword)
-            .input('Gender', sql.NVarChar, gender)
-            .input('Mobile', sql.NVarChar, mobile)
-            .input('Language', sql.NVarChar, language)
-            .input('Birthdate', sql.Date, birthdate)
-            .input('Address', sql.NVarChar, address)
-            .query(`
-                INSERT INTO Admins 
-                (Name, Email, PasswordHash, Gender, Mobile, Language, Birthdate, Address)
-                VALUES 
-                (@Name, @Email, @PasswordHash, @Gender, @Mobile, @Language, @Birthdate, @Address)
-            `);
+        await pool.request()
+            .input('Name', sql.NVarChar, name)
+            .input('Email', sql.NVarChar, email)
+            .input('PasswordHash', sql.NVarChar, hashedPassword)
+            .input('Gender', sql.NVarChar, gender)
+            .input('Mobile', sql.NVarChar, mobile)
+            .input('Language', sql.NVarChar, language)
+            .input('Birthdate', sql.Date, birthdate)
+            .input('Address', sql.NVarChar, address)
+            .query(`
+                INSERT INTO Admins 
+                (Name, Email, PasswordHash, Gender, Mobile, Language, Birthdate, Address)
+                VALUES 
+                (@Name, @Email, @PasswordHash, @Gender, @Mobile, @Language, @Birthdate, @Address)
+            `);
 
-        res.json({ success: true, message: 'Admin registered successfully!' });
-    } catch (err) {
-        console.error(err);
-        if(err.number === 2627){ // duplicate email
-            res.status(400).json({ success: false, message: 'Email already exists!' });
-        } else {
-            res.status(500).json({ success: false, message: 'Server error.' });
-        }
-    }
+        res.json({ success: true, message: 'Admin registered successfully!' });
+    } catch (err) {
+        console.error(err);
+        if(err.number === 2627){ // duplicate email
+            res.status(400).json({ success: false, message: 'Email already exists!' });
+        } else {
+            res.status(500).json({ success: false, message: 'Server error.' });
+        }
+    }
+});
+// ---------------- ✉️ SEND OTP ----------------
+app.post('/otp/send', async (req, res) => {
+    const { mobile } = req.body;
+    if (!mobile) {
+        return res.status(400).json({ success: false, message: 'Mobile number is required.' });
+    }
+
+    // 1. Generate OTP and Expiry Time
+    const otpCode = generateOTP();
+    // OTP should expire in 5 minutes
+    const expiryTime = new Date(Date.now() + 5 * 60 * 1000); 
+
+    try {
+        const pool = await getPool();
+
+        // 2. Check if user exists (Optional: Prevent spam/register only known users)
+        const userCheck = await pool.request()
+            .input('Mobile', sql.NVarChar, mobile)
+            .query('SELECT Id FROM Users WHERE Mobile = @Mobile');
+        
+        if (userCheck.recordset.length > 0) {
+            // If the user already exists, prevent re-registration verification here
+            // or allow it as a way to verify identity. We'll allow it for flexibility.
+        }
+
+        // 3. Store/Update OTP in the database (Upsert pattern: Try update, if no rows, insert)
+        const updateResult = await pool.request()
+            .input('Mobile', sql.NVarChar, mobile)
+            .input('OTP', sql.NVarChar, otpCode)
+            .input('ExpiresAt', sql.DateTime, expiryTime)
+            .query(`
+                UPDATE OtpStorage 
+                SET OTP = @OTP, ExpiresAt = @ExpiresAt
+                WHERE Mobile = @Mobile;
+            `);
+
+        if (updateResult.rowsAffected[0] === 0) {
+            // If update failed (record didn't exist), insert a new record
+            await pool.request()
+                .input('Mobile', sql.NVarChar, mobile)
+                .input('OTP', sql.NVarChar, otpCode)
+                .input('ExpiresAt', sql.DateTime, expiryTime)
+                .query(`
+                    INSERT INTO OtpStorage (Mobile, OTP, ExpiresAt)
+                    VALUES (@Mobile, @OTP, @ExpiresAt);
+                `);
+        }
+
+        
+        console.log(`[OTP DEBUG] Sent OTP ${otpCode} to ${mobile}`);
+
+        res.json({ success: true, message: 'OTP sent successfully.' });
+    } catch (err) {
+        console.error('❌ Send OTP Error:', err);
+        res.status(500).json({ success: false, message: 'Server error during OTP sending.' });
+    }
 });
 
+// ---------------- ✅ VERIFY OTP ----------------
+app.post('/otp/verify', async (req, res) => {
+    const { mobile, otp } = req.body;
+    if (!mobile || !otp) {
+        return res.status(400).json({ success: false, message: 'Mobile and OTP are required.' });
+    }
+
+    try {
+        const pool = await getPool();
+        const result = await pool.request()
+            .input('Mobile', sql.NVarChar, mobile)
+            .input('OTP', sql.NVarChar, otp)
+            .input('CurrentTime', sql.DateTime, new Date())
+            .query(`
+                SELECT * FROM OtpStorage 
+                WHERE Mobile = @Mobile AND OTP = @OTP AND ExpiresAt > @CurrentTime;
+            `);
+
+        const storedOtp = result.recordset[0];
+
+        if (!storedOtp) {
+            return res.status(400).json({ success: false, message: 'Invalid or expired OTP.' });
+        }
+
+        // OTP is valid and not expired. Delete it for security.
+        await pool.request()
+            .input('Mobile', sql.NVarChar, mobile)
+            .query('DELETE FROM OtpStorage WHERE Mobile = @Mobile');
+
+        res.json({ success: true, message: 'Mobile verified.' });
+    } catch (err) {
+        console.error('❌ Verify OTP Error:', err);
+        res.status(500).json({ success: false, message: 'Server error during OTP verification.' });
+    }
+});
 // ---------------- 🔑 USER LOGIN ----------------
 app.post('/users/login', async (req, res) => {
   const { email, password } = req.body;
@@ -180,6 +302,34 @@ app.post('/users/login', async (req, res) => {
     res.status(500).send({ success: false, error: err.message });
   }
 });
+// ---------------- 👶 CHILD LOGIN ----------------
+app.post('/children/login', async (req, res) => {
+  const { email, password } = req.body;
+
+  if (!email || !password)
+    return res.status(400).json({ success: false, message: 'Email and password required.' });
+
+  try {
+    const pool = await getPool();
+    const result = await pool.request()
+      .input('Email', sql.NVarChar, email)
+      .query('SELECT * FROM Children WHERE Email = @Email');
+
+    const child = result.recordset[0];
+    if (!child)
+      return res.status(404).json({ success: false, message: 'Child not found.' });
+
+    const valid = await bcrypt.compare(password, child.PasswordHash);
+    if (!valid)
+      return res.status(401).json({ success: false, message: 'Incorrect password.' });
+
+    res.json({ success: true, message: 'Login successful!', child });
+  } catch (err) {
+    console.error('❌ Child Login Error:', err);
+    res.status(500).json({ success: false, message: 'Server error.' });
+  }
+});
+
 // ---------------- 🔄 UPDATE USER ----------------
 app.put('/users/update/:id', async (req, res) => {
   const userId = parseInt(req.params.id);
@@ -244,33 +394,33 @@ app.post('/rescuers/login', async (req, res) => {
 });
 // ---------------- 🟢 UPDATE RESCUER ACTIVE STATUS ----------------
 app.put('/rescuers/:id/status', async (req, res) => {
-    const rescuerId = parseInt(req.params.id);
-    const { isActive } = req.body; // Expects true (active) or false (offline)
+    const rescuerId = parseInt(req.params.id);
+    const { isActive } = req.body; // Expects true (active) or false (offline)
 
-    if (isNaN(rescuerId) || typeof isActive !== 'boolean') {
-        return res.status(400).send({ success: false, message: 'Invalid Rescuer ID or status value (must be boolean).' });
-    }
+    if (isNaN(rescuerId) || typeof isActive !== 'boolean') {
+        return res.status(400).send({ success: false, message: 'Invalid Rescuer ID or status value (must be boolean).' });
+    }
 
-    try {
-        const pool = await getPool();
-        const result = await pool.request()
-            .input('Id', sql.Int, rescuerId)
-            .input('IsActive', sql.Bit, isActive) // SQL Bit type maps to boolean
-            .query(`
-                UPDATE Rescuers
-                SET IsActive = @IsActive
-                WHERE Id = @Id
-            `);
+    try {
+        const pool = await getPool();
+        const result = await pool.request()
+            .input('Id', sql.Int, rescuerId)
+            .input('IsActive', sql.Bit, isActive) // SQL Bit type maps to boolean
+            .query(`
+                UPDATE Rescuers
+                SET IsActive = @IsActive
+                WHERE Id = @Id
+            `);
 
-        if (result.rowsAffected[0] === 0) {
-            return res.status(404).send({ success: false, message: 'Rescuer not found.' });
-        }
+        if (result.rowsAffected[0] === 0) {
+            return res.status(404).send({ success: false, message: 'Rescuer not found.' });
+        }
 
-        res.send({ success: true, message: `Rescuer status updated to ${isActive ? 'Active' : 'Offline'}!` });
-    } catch (err) {
-        console.error('❌ Update Rescuer Status Error:', err);
-        res.status(500).send({ success: false, error: err.message });
-    }
+        res.send({ success: true, message: `Rescuer status updated to ${isActive ? 'Active' : 'Offline'}!` });
+    } catch (err) {
+        console.error('❌ Update Rescuer Status Error:', err);
+        res.status(500).send({ success: false, error: err.message });
+    }
 });
 // ---------------- ⚡ UPDATE RESCUER PROFILE ----------------
 app.put('/rescuers/update/:id', async (req, res) => {
@@ -308,48 +458,185 @@ app.put('/rescuers/update/:id', async (req, res) => {
     res.status(500).send({ success: false, error: err.message });
   }
 });
+
+
+
 // ---------------- ⚡ Admin Login ----------------
 app.post('/admins/login', async (req, res) => {
-    const { email, password } = req.body;
+    const { email, password } = req.body;
 
-    if (!email || !password) return res.status(400).json({ success: false, message: 'Email and password required.' });
+    if (!email || !password) return res.status(400).json({ success: false, message: 'Email and password required.' });
 
-    try {
-        const pool = await getPool();
-        const result = await pool.request()
-            .input('Email', sql.NVarChar, email)
-            .query('SELECT * FROM Admins WHERE Email = @Email AND IsActive = 1');
+    try {
+        const pool = await getPool();
+        const result = await pool.request()
+            .input('Email', sql.NVarChar, email)
+            .query('SELECT * FROM Admins WHERE Email = @Email AND IsActive = 1');
 
-        const admin = result.recordset[0];
-        if (!admin) return res.status(404).json({ success: false, message: 'Admin not found or inactive.' });
+        const admin = result.recordset[0];
+        if (!admin) return res.status(404).json({ success: false, message: 'Admin not found or inactive.' });
 
-        const validPassword = await bcrypt.compare(password, admin.PasswordHash);
-        if (!validPassword) return res.status(401).json({ success: false, message: 'Incorrect password.' });
+        const validPassword = await bcrypt.compare(password, admin.PasswordHash);
+        if (!validPassword) return res.status(401).json({ success: false, message: 'Incorrect password.' });
 
-        res.json({ success: true, message: 'Login successful!', admin });
-    } catch (err) {
-        console.error(err);
-        res.status(500).json({ success: false, message: 'Server error.' });
-    }
+        res.json({ success: true, message: 'Login successful!', admin });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ success: false, message: 'Server error.' });
+    }
 });
 // ---------------- fetch ADMIN PROFILE ----------------
 app.get('/admins/:id', async (req, res) => {
-    const adminId = parseInt(req.params.id);
-    if (isNaN(adminId)) return res.status(400).json({ success: false, message: "Invalid admin ID" });
+    const adminId = parseInt(req.params.id);
+    if (isNaN(adminId)) return res.status(400).json({ success: false, message: "Invalid admin ID" });
+
+    try {
+        const pool = await getPool();
+        const result = await pool.request()
+            .input('Id', sql.Int, adminId)
+            .query('SELECT Id, Name, Email, Gender, Mobile, Language, Birthdate, Address FROM Admins WHERE Id = @Id AND IsActive = 1');
+
+        const admin = result.recordset[0];
+        if (!admin) return res.status(404).json({ success: false, message: "Admin not found or inactive" });
+
+        res.json({ success: true, admin });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ success: false, message: "Server error" });
+    }
+});
+//-------Gesture Save-------
+app.post("/gestures/save", async (req, res) => {
+  const { userId, gesture } = req.body;
+  if (!userId || !gesture) return res.json({ success: false, message: "Missing data" });
+
+  try {
+    // Example: store gesture JSON in your database
+    const result = await sql.query`
+      UPDATE Users SET GestureData = ${JSON.stringify(gesture)} WHERE Id = ${userId}
+    `;
+    res.json({ success: true });
+  } catch (err) {
+    console.error("Save gesture error:", err);
+    res.json({ success: false, message: "Database error" });
+  }
+});
+
+
+// ---------------- 📄 GET CHILDREN BY PARENT ----------------
+app.get('/children/by-parent/:parentId', async (req, res) => {
+  const parentId = parseInt(req.params.parentId);
+
+  if (!parentId) return res.status(400).json({ success: false, message: 'Invalid parentId' });
+
+  try {
+    const pool = await getPool();
+    const result = await pool.request()
+      .input('ParentId', sql.Int, parentId)
+      .query('SELECT Id, Name, Email, Gender, Birthdate FROM Children WHERE ParentId = @ParentId');
+
+    res.json({ success: true, children: result.recordset });
+  } catch (err) {
+    console.error('❌ Fetch Children Error:', err);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
+
+
+// ---------------- 📍 CHILD LOCATION TRACKING ----------------
+app.post('/child/report-location', async (req, res) => {
+    const { childId, parentId, latitude, longitude } = req.body;
+
+    // 1. Basic validation
+    // The use of 'typeof ... === 'undefined'' is robust for checking null/undefined values
+    if (!childId || !parentId || typeof latitude === 'undefined' || typeof longitude === 'undefined') {
+        return res.status(400).json({ success: false, message: 'Missing required location data.' });
+    }
 
     try {
         const pool = await getPool();
+
+        // 2. Update the Child's current location in the Children table
         const result = await pool.request()
-            .input('Id', sql.Int, adminId)
-            .query('SELECT Id, Name, Email, Gender, Mobile, Language, Birthdate, Address FROM Admins WHERE Id = @Id AND IsActive = 1');
+            .input('ChildId', sql.Int, childId)
+            .input('ParentId', sql.Int, parentId)
+            .input('Latitude', sql.Float, latitude)
+            .input('Longitude', sql.Float, longitude)
+            // Use server time as the LastReportedAt timestamp
+            .input('LastReportedAt', sql.DateTime, new Date()) 
+            .query(`
+                UPDATE Children
+                SET CurrentLatitude = @Latitude,
+                    CurrentLongitude = @Longitude,
+                    LastReportedAt = @LastReportedAt
+                WHERE Id = @ChildId AND ParentId = @ParentId
+            `);
 
-        const admin = result.recordset[0];
-        if (!admin) return res.status(404).json({ success: false, message: "Admin not found or inactive" });
+        if (result.rowsAffected[0] === 0) {
+            return res.status(404).json({ 
+                success: false, 
+                message: 'Child not found or Parent ID mismatch. (Check database records)' 
+            });
+        }
 
-        res.json({ success: true, admin });
+        // 3. Send success response
+        return res.json({ 
+            success: true, 
+            message: 'Child location updated successfully and parent will be notified.' 
+        });
+
     } catch (err) {
-        console.error(err);
-        res.status(500).json({ success: false, message: "Server error" });
+        console.error('❌ Error reporting child location:', err);
+        return res.status(500).json({ 
+            success: false, 
+            message: 'An internal server error occurred while reporting location.' 
+        });
+    }
+});
+// ---------------- 📍 FETCH CHILD LOCATION BY ID ----------------
+app.get('/child/location/:childId', async (req, res) => {
+    const { childId } = req.params;
+
+    if (!childId) {
+        // Fix: Changed .send to .json
+        return res.status(400).json({ success: false, message: "ChildId is required." }); 
+    }
+
+    try {
+        const pool = await getPool();
+
+        const result = await pool.request()
+            .input('ChildId', sql.Int, childId)
+            .query(`
+                SELECT 
+                    [CurrentLatitude],
+                    [CurrentLongitude],
+                    [LastReportedAt]
+                FROM 
+                    [Children]
+                WHERE 
+                    [Id] = @ChildId;
+            `);
+
+        if (result.recordset.length > 0) {
+            const locationData = result.recordset[0];
+            
+            // Fix: Changed .send to .json
+            res.json({ 
+                success: true, 
+                message: "Child location retrieved successfully.",
+                location: locationData 
+            });
+        } else {
+            // Fix: Changed .send to .json
+            res.status(404).json({ success: false, message: "Child not found." }); 
+        }
+
+    } catch (err) {
+        console.error('❌ Fetch Child Location Error:', err);
+        // Fix: Changed .send to .json
+        res.status(500).json({ success: false, error: "Database error or server fault." }); 
     }
 });
 
@@ -373,33 +660,37 @@ app.get('/stations', async (req, res) => {
 });
 // ---------------- 🚨 CREATE INCIDENT ----------------
 app.post('/incidents', async (req, res) => {
-  const { Type, Location, Latitude, Longitude, Status, UserId } = req.body;
+  const { Type, Location, Latitude, Longitude, Status, UserId, ChildId } = req.body;
 
-  if (!UserId) {
-    return res.status(400).send({ success: false, message: "UserId is required" });
-  }
+  // Require at least one of UserId or ChildId
+  if (!UserId && !ChildId) {
+    return res.status(400).send({ success: false, message: "UserId or ChildId is required" });
+  }
 
-  try {
-    const pool = await getPool();
+  try {
+    const pool = await getPool();
 
-    await pool.request()
-      .input('Type', sql.VarChar, Type)
-      .input('Location', sql.VarChar, Location)
-      .input('Latitude', sql.Float, Latitude || null)
-      .input('Longitude', sql.Float, Longitude || null)
-      .input('Status', sql.VarChar, Status || 'Pending')
-      .input('UserId', sql.Int, UserId)
-      .query(`
-        INSERT INTO Incidents (Type, Location, Latitude, Longitude, Status, UserId, CreatedAt)
-        VALUES (@Type, @Location, @Latitude, @Longitude, @Status, @UserId, GETDATE())
-      `);
+    await pool.request()
+      .input('Type', sql.VarChar, Type)
+      .input('Location', sql.VarChar, Location)
+      .input('Latitude', sql.Float, Latitude || null)
+      .input('Longitude', sql.Float, Longitude || null)
+      .input('Status', sql.VarChar, Status || 'Pending')
+      .input('UserId', sql.Int, UserId || null)
+      .input('ChildId', sql.Int, ChildId || null)
+      .query(`
+        INSERT INTO Incidents (Type, Location, Latitude, Longitude, Status, UserId, ChildId, CreatedAt)
+        VALUES (@Type, @Location, @Latitude, @Longitude, @Status, @UserId, @ChildId, GETDATE())
+      `);
 
-    res.send({ success: true, message: "Incident reported successfully!" });
-  } catch (err) {
-    console.error('❌ Create Incident Error:', err);
-    res.status(500).send({ success: false, error: err.message });
-  }
+    res.send({ success: true, message: "Incident reported successfully!" });
+  } catch (err) {
+    console.error('❌ Create Incident Error:', err);
+    res.status(500).send({ success: false, error: err.message });
+  }
 });
+
+
 // ---------------- 📄 FETCH INCIDENTS ----------------
 app.get('/incidents', async (req, res) => {
   try {
@@ -411,6 +702,7 @@ app.get('/incidents', async (req, res) => {
     res.status(500).send({ success: false, error: err.message });
   }
 });
+
 // ---------------- ⚡ UPDATE INCIDENT STATUS (FIXED) ----------------
 app.put('/incidents/:id/status', async (req, res) => {
   const incidentId = parseInt(req.params.id);
@@ -512,7 +804,7 @@ app.get('/contacts/:userId', async (req, res) => {
     res.status(500).send({ success: false, error: err.message });
   }
 });
-// Update an existing contact
+//-------------- Update an existing contact--------
 app.put('/contacts/:id', async (req, res) => {
   const contactId = parseInt(req.params.id);
   const { Name, Relationship, Phone, UserId } = req.body;
@@ -544,7 +836,7 @@ app.put('/contacts/:id', async (req, res) => {
     res.status(500).send({ success: false, error: err.message });
   }
 });
-// Delete a contact
+//---------------- Delete a contact----------------
 app.delete('/contacts/:id', async (req, res) => {
   const contactId = parseInt(req.params.id);
 
@@ -563,129 +855,48 @@ app.delete('/contacts/:id', async (req, res) => {
     res.status(500).send({ success: false, error: err.message });
   }
 });
-// ---------------- 👧 UPDATE CHILD RECORD ----------------
-app.put('/children/:id', async (req, res) => {
-    const childId = parseInt(req.params.id);
-    const { 
-        Name, 
-        Age, 
-        School, 
-        Allergies, 
-        SpecialNeeds, 
-        UserId // The Parent's ID is required for security/verification
-    } = req.body;
 
-    if (!childId || !Name || !UserId) {
-        return res.status(400).send({ success: false, message: 'Child ID, Name, and Parent UserId are required for update.' });
-    }
-
-    // Convert Age to a number, ensuring it's null if not provided or invalid
-    const finalAge = Age ? parseInt(Age) : null;
-    if (Age && (isNaN(finalAge) || finalAge <= 0)) {
-        return res.status(400).send({ success: false, message: "Invalid Age provided." });
-    }
-
-    try {
-        const pool = await getPool();
-        const result = await pool.request()
-            .input('Id', sql.Int, childId)
-            .input('Name', sql.NVarChar, Name)
-            .input('Age', sql.Int, finalAge)
-            .input('School', sql.NVarChar, School || null)
-            .input('Allergies', sql.NVarChar, Allergies || null)
-            .input('SpecialNeeds', sql.NVarChar, SpecialNeeds || null)
-            .input('UserId', sql.Int, UserId)
-            .query(`
-                UPDATE Children
-                SET Name = @Name,
-                    Age = @Age,
-                    School = @School,
-                    Allergies = @Allergies,
-                    SpecialNeeds = @SpecialNeeds,
-                    UpdatedAt = GETDATE()
-                WHERE Id = @Id AND UserId = @UserId 
-                -- Use UserId in WHERE clause to ensure only the owner can update the record
-            `);
-
-        if (result.rowsAffected[0] === 0) {
-            // This happens if the ID is wrong, or the UserId doesn't match the record
-            return res.status(404).send({ success: false, message: 'Child record not found or unauthorized to update.' });
-        }
-
-        res.send({ success: true, message: 'Child details updated successfully!' });
-    } catch (err) {
-        console.error('❌ Update Child Record Error:', err);
-        res.status(500).send({ success: false, error: err.message });
-    }
-});
-// ---------------- 👧 FETCH CHILDREN BY USER ID ----------------
-app.get('/children/:userId', async (req, res) => {
-    const userId = parseInt(req.params.userId);
-
-    if (isNaN(userId) || userId < 1) {
-        return res.status(400).send({ success: false, message: 'Invalid User ID.' });
-    }
-
-    try {
-        const pool = await getPool();
-        const result = await pool.request()
-            .input('UserId', sql.Int, userId)
-            .query(`
-                SELECT Id, Name, Age, School, Allergies, SpecialNeeds, CreatedAt 
-                FROM Children 
-                WHERE UserId = @UserId 
-                ORDER BY Name
-            `);
-
-        // Check for the existence of the Children table and the UserId column in your database.
-        res.send({ success: true, children: result.recordset });
-    } catch (err) {
-        console.error('❌ Fetch Children Error:', err);
-        // If you see a SQL error here, it likely means the Children table doesn't exist.
-        res.status(500).send({ success: false, error: err.message });
-    }
-});
 // ---------------- ACTIVE RESCUERS ----------------
 app.get('/rescuer/active', async (req, res) => {
-  try {
-    const pool = await getPool();
-    const result = await pool.request()
-      .query('SELECT * FROM Rescuers WHERE IsActive = 1');
+  try {
+    const pool = await getPool();
+    const result = await pool.request()
+      .query('SELECT * FROM Rescuers WHERE IsActive = 1');
 
-    res.json(result.recordset);
-  } catch (error) {
-    console.error('❌ Error fetching active rescuers:', error);
-    res.status(500).json({ message: 'Error fetching active rescuers' });
-  }
+    res.json(result.recordset);
+  } catch (error) {
+    console.error('❌ Error fetching active rescuers:', error);
+    res.status(500).json({ message: 'Error fetching active rescuers' });
+  }
 });
 
 // ---------- GET All Incidents ----------
 app.get('/incidents', async (req, res) => {
-  try {
-    const result = await sql.query`SELECT * FROM Incidents`;
-    res.send({
-      success: true,
-      incidents: result.recordset
-    });
-  } catch (err) {
-    console.error('Error fetching incidents:', err);
-    res.status(500).send({ success: false, message: 'Database error' });
-  }
+  try {
+    const result = await sql.query`SELECT * FROM Incidents`;
+    res.send({
+      success: true,
+      incidents: result.recordset
+    });
+  } catch (err) {
+    console.error('Error fetching incidents:', err);
+    res.status(500).send({ success: false, message: 'Database error' });
+  }
 });
 // ---------------- 🟢 ROUTES FOR WEB PAGES ----------------
 app.use(express.static(path.join(__dirname, 'public')));
 // Admin login/signup page
 app.get('/admin-login', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'admin-login-signup.html'));
+  res.sendFile(path.join(__dirname, 'public', 'admin-login-signup.html'));
 });
 
 // Dashboard page
 app.get('/admin-dashboard', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'admin-dashboard.html'));
+  res.sendFile(path.join(__dirname, 'public', 'admin-dashboard.html'));
 });
 // Optional: redirect root to admin login
 app.get('/', (req, res) => {
-  res.redirect('/admin-login');
+  res.redirect('/admin-login');
 });
 
 // ---------------- ⚙️ START SERVER ----------------

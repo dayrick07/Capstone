@@ -38,7 +38,7 @@ const INCIDENT_TYPES = [ // Service Types Kept
 // Color map for card borders and text based on status/assignment
 const STATUS_FALLBACK_COLORS = {
     'Pending': '#FFC107', // Orange for Pending unassigned incidents
-    'Active': '#28A745', // Green for incidents I am assigned to
+    'Accepted': '#28A745', // Green for incidents I am assigned to (used to be Active)
     'Critical': '#DC3545', 
     'High': '#FFC107',
     'Medium': '#007BFF', 
@@ -97,8 +97,9 @@ export default function RescuerHomeScreen({ navigation, route }) {
             if (response.data.success) {
                 
                 // Filter out 'Resolved' or 'Done' incidents to only show active dispatches
+                // Note: Filter updated to check for 'Resolved' status
                 const activeIncidents = response.data.incidents.filter(
-                    (i) => i.Status !== "Resolved" && i.Status !== "Done"
+                    (i) => i.Status !== "Resolved" 
                 );
 
                 const sortedIncidents = activeIncidents.sort(
@@ -197,7 +198,8 @@ export default function RescuerHomeScreen({ navigation, route }) {
         const assignedRescuerId = item.RescuerId;
         const isAssignedToMe = assignedRescuerId === numericRescuerId;
         const isPending = item.Status === 'Pending';
-        const isActive = item.Status === 'Active';
+        // Check if the incident is currently Accepted (or was 'Active' before the change)
+        const isAccepted = item.Status === 'Accepted' || item.Status === 'Active'; 
 
         // Set border color based on Priority or Status Fallback
         let borderStyle = styles.cardPending; 
@@ -223,45 +225,49 @@ export default function RescuerHomeScreen({ navigation, route }) {
                 <Text style={styles.timestamp}>
                     Reported: {formatTimestamp(item.CreatedAt)}
                 </Text>
-                <Text style={[styles.statusText, {color: isAssignedToMe ? STATUS_FALLBACK_COLORS.Active : '#8B0000'}]}>
+                <Text style={[styles.statusText, {color: isAssignedToMe ? STATUS_FALLBACK_COLORS.Accepted : '#8B0000'}]}>
                     Status: **{item.Status}** {assignedRescuerId ? ` (Assigned ID: ${assignedRescuerId})` : ''}
                 </Text>
                 
-                <View style={styles.actions}>
-                    {/* 1. View on Map Button (Always visible) */}
-                    <TouchableOpacity
-                        style={[styles.button, styles.buttonMap]}
-                        onPress={() => handleViewOnMap(item)}
-                    >
-                        <Text style={styles.buttonText}>View on Map</Text>
-                    </TouchableOpacity>
+                {/* 1. View on Map Button (Now full width, always visible) */}
+                <TouchableOpacity
+                    style={[styles.button, styles.buttonMapFull]} 
+                    onPress={() => handleViewOnMap(item)}
+                >
+                    <Text style={styles.buttonText}>🗺️ View on Map</Text>
+                </TouchableOpacity>
 
+                {/* New Action Row for Accept/Done buttons */}
+                <View style={styles.actions}>
+                    
                     {/* 2. Accept Button (Visible if Pending and not assigned to anyone) */}
                     {isPending && !assignedRescuerId && (
                         <TouchableOpacity
-                            style={[styles.button, styles.buttonAccept]}
-                            // Status changes 'Pending' to 'Active'
-                            onPress={() => updateStatus(item.Id, 'Active')} 
+                            style={[styles.button, styles.buttonAction, styles.buttonAccept]} 
+                            // ******* MODIFICATION HERE: Status changes 'Pending' to 'Accepted' *******
+                            onPress={() => updateStatus(item.Id, 'Accepted')} 
                         >
-                            <Text style={styles.buttonText}>Accept</Text>
+                            <Text style={styles.buttonText}>Accept Dispatch</Text>
                         </TouchableOpacity>
                     )}
                     
-                    {/* 3. Complete/Resolved Button (Visible if Active AND assigned to the current rescuer) */}
-                    {isActive && isAssignedToMe && (
+                    {/* 3. Complete/Resolved Button (Visible if Accepted AND assigned to the current rescuer) */}
+                    {isAccepted && isAssignedToMe && (
                         <TouchableOpacity
-                            style={[styles.button, styles.buttonResolved]}
+                            style={[styles.button, styles.buttonAction, styles.buttonResolved]} 
                             onPress={() => 
-                                Alert.alert("Confirm Resolution", "Mark this incident as Done?", [
+                                Alert.alert("Confirm Resolution", "Mark this incident as Resolved?", [
                                     { text: "Cancel", style: "cancel" },
-                                    { text: "Yes", onPress: () => updateStatus(item.Id, 'Done') },
+                                    // ******* MODIFICATION HERE: Status changes to 'Resolved' *******
+                                    { text: "Yes", onPress: () => updateStatus(item.Id, 'Resolved') }, 
                                 ])
                             }
                         >
-                            <Text style={styles.buttonText}>Done</Text>
+                            <Text style={styles.buttonText}>Mark Resolved</Text>
                         </TouchableOpacity>
                     )}
                 </View>
+                
                 {/* Helper text for assignment */}
                 {isPending && assignedRescuerId && assignedRescuerId !== numericRescuerId && (
                     <Text style={styles.assignedNote}>⚠️ Already assigned to another rescuer.</Text>
@@ -408,8 +414,9 @@ const styles = StyleSheet.create({
     cardPending: { 
         borderLeftColor: STATUS_FALLBACK_COLORS['Pending'], // Orange
     },
+    // Updated to use the Accepted color/logic
     cardAssigned: { 
-        borderLeftColor: STATUS_FALLBACK_COLORS['Active'], // Green
+        borderLeftColor: STATUS_FALLBACK_COLORS['Accepted'], // Green
         backgroundColor: "#e8f5e9",
     },
     title: { fontSize: 18, fontWeight: "bold", marginBottom: 5 },
@@ -420,25 +427,30 @@ const styles = StyleSheet.create({
     // BUTTON STYLES
     actions: {
         flexDirection: "row",
-        justifyContent: "space-between",
+        justifyContent: "flex-end", // Align Accept/Done buttons to the right
         marginTop: 10,
         gap: 10, 
     },
     button: {
-        flex: 1,
         padding: 10,
         borderRadius: 8,
         minHeight: 40,
     },
-    buttonMap: { 
+    // Style for the View on Map button (now full width)
+    buttonMapFull: { 
         backgroundColor: "#007bff",
-        flex: 1.5,
+        marginTop: 10, // Added margin top to separate it from the status text
+        width: '100%',
+    },
+    // Style for the Accept/Done buttons (they are in the actions row and use flex: 1)
+    buttonAction: {
+        flex: 1,
     },
     buttonAccept: { 
-        backgroundColor: "#28aa45", 
+        backgroundColor: "#28aa45", // Green for Accept
     },
     buttonResolved: { 
-        backgroundColor: "#A83232", // Used for 'Done' status
+        backgroundColor: "#A83232", // Maroon/Red for Resolved
     },
     buttonText: { color: "#fff", textAlign: "center", fontWeight: "bold", fontSize: 13 },
 

@@ -14,8 +14,7 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { ThemeContext } from "../ThemeContext";
 import axios from "axios";
-
-const SERVER_URL = "http://192.168.0.111:3000";
+import { SERVER_URL } from "../config"; // adjust path
 
 export default function CreateContactScreen({ route, navigation }) {
   const { isDarkMode } = useContext(ThemeContext);

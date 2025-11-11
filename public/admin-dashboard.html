@@ -1,457 +1,853 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>SafeKaFernandino Admin Dashboard</title>
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
-  <style>
-    body { background: #f8f9fa; }
-    .navbar { background-color: #007bff; }
-    .navbar-brand, .nav-link { color: #fff !important; }
-    .card { border-radius: 15px; box-shadow: 0 2px 6px rgba(0,0,0,0.1); }
-    table th { background-color: #007bff; color: white; cursor: pointer; }
-    .summary-card { text-align: center; padding: 20px; }
-    .summary-value { font-size: 1.8rem; font-weight: bold; color: #007bff; }
-    .filter-container select, .filter-container input { display: inline-block; width: auto; margin-left: 5px; }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SafeKaFernandino Admin Dashboard</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <style>
+        /* General Body & Background (Light Mode Default) */
+        body { 
+            background: #fdfdfe; /* Very light, almost white background */
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            color: #343a40; /* Dark grey for general text */
+            transition: background-color 0.3s, color 0.3s; /* Smooth transition for dark mode toggle */
+        }
+        
+        /* Navbar */
+        .navbar { 
+            background-color: #3f51b5; /* Muted Indigo Blue */
+            box-shadow: 0 3px 8px rgba(0, 0, 0, 0.1); /* Softer shadow */
+        }
+        .navbar-brand, .nav-link { 
+            color: #fff !important; 
+            font-weight: 600;
+        }
+        /* Buttons in Navbar - Use Bootstrap defaults for subtlety */
+        .navbar .btn-light {
+            color: #3f51b5; /* Indigo text for light buttons */
+            background-color: #fff;
+            border-color: #fff;
+        }
+        
+        /* Cards & Containers */
+        .card { 
+            border: 1px solid rgba(0, 0, 0, 0.05); /* Very light border */
+            border-radius: 10px; /* Slightly less rounded */
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.06); /* Lighter shadow */
+            transition: transform 0.15s ease-in-out, box-shadow 0.15s ease-in-out, background-color 0.3s, color 0.3s;
+        }
+        .card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+        }
+        .card-header {
+            border-top-left-radius: 9px; /* Match card border-radius */
+            border-top-right-radius: 9px;
+            font-size: 1.05rem;
+            font-weight: 600;
+            padding: 0.9rem 1.25rem;
+            color: #fff; /* White text for all headers */
+        }
+        /* Subtle header background colors */
+        .card-header.bg-primary { background-color: #3f51b5 !important; } /* Indigo */
+        .card-header.bg-info { background-color: #03a9f4 !important; } /* Light Blue */
+        .card-header.bg-warning { background-color: #ffc107 !important; color: #343a40 !important;} /* Amber, darker text */
+        .card-header.bg-success { background-color: #4CAF50 !important; } /* Green */
+
+
+        /* Summary Cards - very subtle colored backgrounds */
+        .summary-card { 
+            text-align: center; 
+            padding: 20px; 
+            background: #ffffff; /* Default white background */
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            transition: background-color 0.3s;
+        }
+        /* Subtle light background tints for summary cards */
+        .summary-card.total { background-color: #e3f2fd; } /* Light Blue */
+        .summary-card.active { background-color: #e8f5e9; } /* Light Green */
+        .summary-card.pending { background-color: #fffde7; } /* Very Light Yellow */
+        .summary-card.resolved { background-color: #f3e5f5; } /* Very Light Purple */
+
+        .summary-value { 
+            font-size: 2.2rem; /* Slightly smaller */
+            font-weight: 700; 
+            margin-top: 8px;
+        }
+        .summary-card > div:first-child {
+            color: #6c757d;
+            font-size: 0.85rem;
+            text-transform: uppercase;
+            font-weight: 500;
+        }
+        /* Specific summary value colors */
+        #totalIncidents { color: #3f51b5; } /* Indigo */
+        #activeRescuers { color: #4CAF50; } /* Green */
+        #pendingCases { color: #ffc107; } /* Amber */
+        #completedCases { color: #03a9f4; } /* Light Blue */
+
+
+        /* Table */
+        table th { 
+            background-color: #4CAF50; /* A pleasant green for table header */
+            color: white; 
+            cursor: pointer; 
+            font-weight: 600;
+            user-select: none;
+            position: sticky; /* Keep header visible on scroll */
+            top: 0;
+            z-index: 1; /* Ensure it stays above other content */
+        }
+        .table-striped tbody tr:nth-of-type(odd) {
+            background-color: #f8f9fa; /* Light stripe */
+        }
+        .table-hover tbody tr:hover {
+            background-color: #e9eff5; /* Subtle hover effect */
+        }
+        #incidentTable tbody tr {
+            cursor: pointer;
+        }
+        
+        /* Filters */
+        .filter-container { 
+            display: flex; 
+            flex-wrap: wrap; /* Allow wrapping on smaller screens */
+            align-items: center; 
+            gap: 10px;
+        }
+        .filter-container select, .filter-container input { 
+            width: auto; 
+            min-width: 100px;
+            border-radius: 5px;
+            border: 1px solid #ced4da;
+            padding: 0.375rem 0.75rem;
+        }
+        .filter-container label {
+            font-weight: 500;
+            color: #f8f9fa; /* Lighter text for labels in dark header */
+            margin-right: 3px;
+            margin-bottom: 0; /* Remove default margin */
+        }
+        .search-input { 
+            width: 200px !important; 
+            flex-grow: 1; /* Allow it to grow */
+        } 
+
+        /* Rescuer List */
+        #rescuerListContainer .border {
+            border: 1px solid #dcdfe3 !important; /* Slightly darker border */
+            background-color: #fefefe;
+            border-radius: 8px;
+            padding: 10px;
+            margin-bottom: 8px; /* Reduce margin a bit */
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05); /* Very slight shadow for individual items */
+        }
+        #rescuerListContainer select {
+            border-radius: 5px;
+            border: 1px solid #ced4da;
+            padding: 2px 5px;
+            font-size: 0.9rem;
+        }
+
+        /* Modal specific styling for iframe */
+        #mapModal .modal-body {
+            padding: 0; /* Remove padding around map */
+        }
+        #mapFrame {
+            border-radius: 0 0 9px 9px; /* Match modal border radius */
+        }
+
+        /* --- DARK MODE STYLES START HERE --- */
+
+        /* Base Dark Mode */
+        .dark-mode { 
+            background: #121212; /* Very dark background */
+            color: #e0e0e0; /* Light text for readability */
+        }
+
+        /* Navbar in Dark Mode */
+        .dark-mode .navbar { 
+            background-color: #1f1f1f; /* Slightly lighter dark gray for contrast */
+            box-shadow: 0 3px 8px rgba(255, 255, 255, 0.1);
+        }
+        .dark-mode .navbar-brand, .dark-mode .nav-link { 
+            color: #bdbdbd !important; 
+        }
+        .dark-mode .btn-light {
+            color: #121212; /* Dark text for light buttons in dark mode */
+        }
+        /* Style for the Dark Mode button itself when in Light Mode (btn-secondary) is already handled by Bootstrap */
+        .dark-mode .btn-info {
+            background-color: #03a9f4; /* Keep info color for contrast */
+            color: white;
+        }
+
+        /* Cards & Containers in Dark Mode */
+        .dark-mode .card { 
+            background-color: #1f1f1f; /* Dark background for cards */
+            border: 1px solid rgba(255, 255, 255, 0.1); /* Light border */
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.5); /* Stronger shadow */
+        }
+        .dark-mode .card-header {
+            color: #fff !important; 
+        }
+
+        /* Summary Cards in Dark Mode */
+        .dark-mode .summary-card.total { background-color: #1e3a5f; } /* Dark Blue */
+        .dark-mode .summary-card.active { background-color: #1b4f2c; } /* Dark Green */
+        .dark-mode .summary-card.pending { background-color: #5d4037; } /* Dark Brown/Yellow */
+        .dark-mode .summary-card.resolved { background-color: #311b92; } /* Dark Purple */
+
+        /* Text & Value Colors in Dark Mode */
+        .dark-mode .summary-card > div:first-child { color: #bdbdbd; }
+        .dark-mode #totalIncidents { color: #9fa8da; } /* Lighter Indigo */
+        .dark-mode #activeRescuers { color: #81c784; } /* Lighter Green */
+        .dark-mode #pendingCases { color: #ffd54f; } /* Lighter Amber */
+        .dark-mode #completedCases { color: #4fc3f7; } /* Lighter Blue */
+
+        /* Table in Dark Mode */
+        .dark-mode table th { 
+            background-color: #388e3c; /* Darker green for header */
+            color: white; 
+        }
+        .dark-mode .table-striped tbody tr:nth-of-type(odd) {
+            background-color: #242424; /* Dark stripe */
+        }
+        .dark-mode .table-hover tbody tr:hover {
+            background-color: #2a2a2a; /* Subtle hover effect */
+        }
+        .dark-mode table, .dark-mode th, .dark-mode td {
+            border-color: #333 !important; /* Darker border lines */
+        }
+
+        /* Form Controls in Dark Mode */
+        .dark-mode .filter-container select, 
+        .dark-mode .filter-container input,
+        .dark-mode .search-input { 
+            background-color: #333;
+            color: #eee;
+            border-color: #444;
+        }
+        .dark-mode .filter-container label {
+            color: #e0e0e0;
+        }
+
+        /* Rescuer List in Dark Mode */
+        .dark-mode #rescuerListContainer .border {
+            border: 1px solid #333 !important; 
+            background-color: #242424;
+        }
+        .dark-mode #rescuerListContainer select {
+            background-color: #333;
+            color: #eee;
+            border-color: #444;
+        }
+        /* --- DARK MODE STYLES END HERE --- */
+    </style>
 </head>
 <body>
 
-  <!-- 🔹 NAVBAR -->
-  <nav class="navbar navbar-expand-lg">
+    <nav class="navbar navbar-expand-lg">
     <div class="container-fluid">
-      <a class="navbar-brand fw-bold" href="#">🛠 SafeKaFernandino Admin</a>
-      <div class="d-flex align-items-center">
+        <a class="navbar-brand fw-bold" href="#">🛠 SafeKaFernandino Admin</a>
+        <div class="d-flex align-items-center">
         <span id="adminNameNav" class="text-white me-3"></span>
+        
+        <button class="btn btn-secondary btn-sm me-2" id="btn-toggle-darkmode">
+            🌙 Dark Mode
+        </button>
+        
         <button class="btn btn-light btn-sm me-2" id="btn-toggle-profile">Profile</button>
-        <button class="btn btn-light btn-sm me-2" onclick="loadData()">🔄 Refresh</button>
+        <button class="btn btn-warning btn-sm me-2" onclick="loadData()">🔄 Refresh</button>
         <button class="btn btn-danger btn-sm" onclick="logout()">Logout</button>
-      </div>
+        </div>
     </div>
-  </nav>
+    </nav>
 
-  <div class="container mt-4">
+    <div class="container mt-4">
 
-    <!-- 🔹 ADMIN PROFILE (Hidden by default) -->
-    <div class="row mb-4" id="adminProfileCard" style="display:none">
-      <div class="col-md-12">
-        <div class="card p-3">
-          <h5>👤 Admin Profile</h5>
-          <p><strong>Name:</strong> <span id="adminName">Loading...</span></p>
-          <p><strong>Email:</strong> <span id="adminEmail">Loading...</span></p>
-          <p><strong>Mobile:</strong> <span id="adminMobile">Loading...</span></p>
-          <p><strong>Station:</strong> <span id="adminStation">Loading...</span></p>
-          <div class="d-flex mt-2">
-            <button class="btn btn-primary btn-sm me-2" id="btn-edit-profile">Edit Profile</button>
-            <button class="btn btn-success btn-sm me-2" id="btn-save-profile" style="display:none">Save Changes</button>
-            <button class="btn btn-secondary btn-sm" id="btn-cancel-profile" style="display:none">Cancel</button>
-          </div>
+        <div class="row mb-4" id="adminProfileCard" style="display:none">
+        <div class="col-md-12">
+            <div class="card p-3">
+            <h5>👤 Admin Profile</h5>
+            <p><strong>Name:</strong> <span id="adminName">Loading...</span></p>
+            <p><strong>Email:</strong> <span id="adminEmail">Loading...</span></p>
+            <p><strong>Mobile:</strong> <span id="adminMobile">Loading...</span></p>
+            <p><strong>Station:</strong> <span id="adminStation">Loading...</span></p>
+            <div class="d-flex mt-2">
+                <button class="btn btn-primary btn-sm me-2" id="btn-edit-profile">Edit Profile</button>
+                <button class="btn btn-success btn-sm me-2" id="btn-save-profile" style="display:none">Save Changes</button>
+                <button class="btn btn-secondary btn-sm" id="btn-cancel-profile" style="display:none">Cancel</button>
+            </div>
+            </div>
         </div>
-      </div>
-    </div>
+        </div>
 
-    <!-- 🔹 DASHBOARD SUMMARY -->
-    <div class="row mb-4" id="summaryRow">
-      <div class="col-md-3">
-        <div class="card summary-card">
-          <div>Total Incidents</div>
-          <div id="totalIncidents" class="summary-value">0</div>
+        <div class="row mb-4" id="summaryRow">
+        <div class="col-md-3">
+            <div class="card summary-card total">
+            <div>Total Incidents</div>
+            <div id="totalIncidents" class="summary-value">0</div>
+            </div>
         </div>
-      </div>
-      <div class="col-md-3">
-        <div class="card summary-card">
-          <div>Active Rescuers</div>
-          <div id="activeRescuers" class="summary-value">0</div>
+        <div class="col-md-3">
+            <div class="card summary-card active">
+            <div>Active Rescuers</div>
+            <div id="activeRescuers" class="summary-value">0</div>
+            </div>
         </div>
-      </div>
-      <div class="col-md-3">
-        <div class="card summary-card">
-          <div>Pending Cases</div>
-          <div id="pendingCases" class="summary-value">0</div>
+        <div class="col-md-3">
+            <div class="card summary-card pending">
+            <div>Pending Cases</div>
+            <div id="pendingCases" class="summary-value">0</div>
+            </div>
         </div>
-      </div>
-      <div class="col-md-3">
-        <div class="card summary-card">
-          <div>Resolved Cases</div>
-          <div id="completedCases" class="summary-value">0</div>
+        <div class="col-md-3">
+            <div class="card summary-card resolved">
+            <div>Resolved Cases</div>
+            <div id="completedCases" class="summary-value">0</div>
+            </div>
         </div>
-      </div>
-    </div>
+        </div>
 
-    <!-- 🔹 VIEW LOGGED-IN RESCUERS -->
-    <div class="row mb-4">
-      <div class="col-md-12">
-        <div class="card p-3">
-          <div class="d-flex justify-content-between align-items-center mb-3">
-            <h5>👨‍🚒 Active Rescuers</h5>
-            <button id="btn-show-rescuers" class="btn btn-success btn-sm">Refresh List</button>
-          </div>
-          <div id="rescuerListContainer">
-            <p>No data loaded yet.</p>
-          </div>
+        <div class="row mb-4">
+        <div class="col-md-12">
+            <div class="card p-3">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h5>👨‍🚒 Active Rescuers</h5>
+                <button id="btn-show-rescuers" class="btn btn-outline-primary btn-sm">Refresh List</button>
+            </div>
+            <div id="rescuerListContainer">
+                <p>No data loaded yet.</p>
+            </div>
+            </div>
         </div>
-      </div>
-    </div>
+        </div>
 
-    <!-- 🔹 CHARTS -->
-    <div class="row mb-4">
-      <div class="col-md-4">
+        <div class="row mb-4">
+        <div class="col-md-4">
+            <div class="card">
+            <div class="card-header bg-info text-white fw-bold">📊 Incident Type Distribution</div>
+            <div class="card-body"><canvas id="typeChart"></canvas></div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card">
+            <div class="card-header bg-warning text-dark fw-bold">📈 Incident Status Overview</div>
+            <div class="card-body"><canvas id="statusChart"></canvas></div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card">
+            <div class="card-header bg-success text-white fw-bold">📉 Incidents Over Time</div>
+            <div class="card-body"><canvas id="lineChart"></canvas></div>
+            </div>
+            </div>
+        </div>
+
         <div class="card">
-          <div class="card-header bg-info text-white fw-bold">📊 Incident Type Distribution</div>
-          <div class="card-body"><canvas id="typeChart"></canvas></div>
+        <div class="card-header bg-primary text-white fw-bold d-flex flex-wrap justify-content-between align-items-center">
+            <span class="p-2">🧾 Incident History</span>
+            <div class="d-flex flex-wrap align-items-center">
+                        <input type="text" id="incidentSearch" class="form-control form-control-sm search-input me-3" placeholder="Search ID, Type, Location">
+            
+            <div class="filter-container">
+                <label class="mb-0">Status:</label>
+                <select id="statusFilter" class="form-select form-select-sm">
+                <option value="">All</option>
+                <option value="Pending">Pending</option>
+                <option value="Accepted">Accepted</option>
+                <option value="Resolved">Resolved</option>
+                </select>
+
+                <label class="mb-0">Barangay:</label>
+                <select id="barangayFilter" class="form-select form-select-sm">
+                <option value="">All</option>
+                <option>Alasas</option>
+                <option>Baliti</option>
+                <option>Bulaon</option>
+                <option>Calulut</option>
+                <option>Dela Paz Norte</option>
+                <option>Dela Paz Sur</option>
+                <option>Del Carmen</option>
+                <option>Del Pilar</option>
+                <option>Del Rosario</option>
+                <option>Dolores</option>
+                <option>Juliana</option>
+                <option>Lara</option>
+                <option>Lourdes</option>
+                <option>Magliman</option>
+                <option>Maimpis</option>
+                <option>Malino</option>
+                <option>Malpitic</option>
+                <option>Pandaras</option>
+                <option>Panipuan</option>
+                <option>Quebiawan</option>
+                <option>Saguin</option>
+                <option>San Agustin</option>
+                <option>San Felipe</option>
+                <option>San Isidro</option>
+                <option>San Jose</option>
+                <option>San Juan</option>
+                <option>San Nicolas</option>
+                <option>San Pedro Cutud</option>
+                <option>Santa Lucia</option>
+                <option>Santa Teresita</option>
+                <option>Santo Niño</option>
+                <option>Santo Rosario (Poblacion)</option>
+                <option>Sindalan</option>
+                <option>Telabastagan</option>
+                </select>
+
+                <label class="mb-0">Date Range:</label>
+                <select id="dateFilter" class="form-select form-select-sm">
+                <option value="">All</option>
+                <option value="week">This Week</option>
+                <option value="month">This Month</option>
+                <option value="custom">Custom</option>
+                </select>
+
+                <input type="date" id="startDate" class="form-control form-control-sm d-none">
+                <input type="date" id="endDate" class="form-control form-control-sm d-none">
+            </div>
+            </div>
         </div>
-      </div>
-      <div class="col-md-4">
-        <div class="card">
-          <div class="card-header bg-warning text-dark fw-bold">📈 Incident Status Overview</div>
-          <div class="card-body"><canvas id="statusChart"></canvas></div>
+        <div class="card-body p-4">
+            <div class="table-responsive">
+            <table class="table table-striped table-hover" id="incidentTable">
+                <thead>
+                <tr>
+                    <th onclick="sortTable('Id')">ID</th>
+                    <th onclick="sortTable('Type')">Type</th>
+                    <th onclick="sortTable('Location')">Location</th>
+                    <th onclick="sortTable('Status')">Status</th>
+                    <th onclick="sortTable('UserId')">UserId</th>
+                    <th onclick="sortTable('RescuerId')">RescuerId</th>
+                    <th onclick="sortTable('CreatedAt')">CreatedAt</th>
+                </tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+            </div>
         </div>
-      </div>
-      <div class="col-md-4">
-        <div class="card">
-          <div class="card-header bg-success text-white fw-bold">📉 Incidents Over Time</div>
-          <div class="card-body"><canvas id="lineChart"></canvas></div>
         </div>
-      </div>
+
     </div>
 
-    <!-- 🔹 FILTERS + INCIDENT HISTORY -->
-    <div class="card">
-      <div class="card-header bg-primary text-white fw-bold d-flex justify-content-between align-items-center">
-        🧾 Incident History
-        <div class="filter-container">
-          <label>Status:</label>
-          <select id="statusFilter" class="form-select form-select-sm">
-            <option value="">All</option>
-            <option value="Pending">Pending</option>
-            <option value="Accepted">Accepted</option>
-            <option value="Resolved">Resolved</option>
-          </select>
-
-          <label>Barangay:</label>
-          <select id="barangayFilter" class="form-select form-select-sm">
-            <option value="">All</option>
-            <option>Alasas</option>
-            <option>Baliti</option>
-            <option>Bulaon</option>
-            <option>Calulut</option>
-            <option>Dela Paz Norte</option>
-            <option>Dela Paz Sur</option>
-            <option>Del Carmen</option>
-            <option>Del Pilar</option>
-            <option>Del Rosario</option>
-            <option>Dolores</option>
-            <option>Juliana</option>
-            <option>Lara</option>
-            <option>Lourdes</option>
-            <option>Magliman</option>
-            <option>Maimpis</option>
-            <option>Malino</option>
-            <option>Malpitic</option>
-            <option>Pandaras</option>
-            <option>Panipuan</option>
-            <option>Quebiawan</option>
-            <option>Saguin</option>
-            <option>San Agustin</option>
-            <option>San Felipe</option>
-            <option>San Isidro</option>
-            <option>San Jose</option>
-            <option>San Juan</option>
-            <option>San Nicolas</option>
-            <option>San Pedro Cutud</option>
-            <option>Santa Lucia</option>
-            <option>Santa Teresita</option>
-            <option>Santo Niño</option>
-            <option>Santo Rosario (Poblacion)</option>
-            <option>Sindalan</option>
-            <option>Telabastagan</option>
-          </select>
-
-          <label>Date Range:</label>
-          <select id="dateFilter" class="form-select form-select-sm">
-            <option value="">All</option>
-            <option value="week">This Week</option>
-            <option value="month">This Month</option>
-            <option value="custom">Custom</option>
-          </select>
-
-          <input type="date" id="startDate" class="form-control form-control-sm d-none">
-          <input type="date" id="endDate" class="form-control form-control-sm d-none">
-        </div>
-      </div>
-      <div class="card-body">
-        <table class="table table-striped" id="incidentTable">
-          <thead>
-            <tr>
-              <th onclick="sortTable('Id')">ID</th>
-              <th onclick="sortTable('Type')">Type</th>
-              <th onclick="sortTable('Location')">Location</th>
-              <th onclick="sortTable('Status')">Status</th>
-              <th onclick="sortTable('UserId')">UserId</th>
-              <th onclick="sortTable('RescuerId')">RescuerId</th>
-              <th onclick="sortTable('CreatedAt')">CreatedAt</th>
-            </tr>
-          </thead>
-          <tbody></tbody>
-        </table>
-      </div>
-    </div>
-
-  </div>
-
-  <!-- 🔹 MAP MODAL -->
-  <div class="modal fade" id="mapModal" tabindex="-1" aria-hidden="true">
+    <div class="modal fade" id="mapModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-lg modal-dialog-centered">
-      <div class="modal-content">
+        <div class="modal-content">
         <div class="modal-header">
-          <h5 class="modal-title">Incident Location</h5>
-          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            <h5 class="modal-title">Incident Location</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
         </div>
         <div class="modal-body">
-          <iframe id="mapFrame" width="100%" height="400" style="border:0;" allowfullscreen="" loading="lazy"></iframe>
+            <iframe id="mapFrame" width="100%" height="400" style="border:0;" allowfullscreen="" loading="lazy"></iframe>
         </div>
-      </div>
+        </div>
     </div>
-  </div>
+    </div>
 
-  <script>
-    const SERVER_URL = "http://localhost:3000";
-    let allIncidents = [];
-    let sortOrder = { column: null, ascending: true };
+    <script>
+        const SERVER_URL = "http://localhost:3000";
+        let allIncidents = [];
+        let sortOrder = { column: null, ascending: true };
 
-    // 🔹 ADMIN PROFILE
-    async function loadAdminProfile() {
-      try {
-        const res = await fetch(`${SERVER_URL}/admins/me`, {
-          headers: { "Authorization": `Bearer ${localStorage.getItem("token")}` }
-        });
-        const data = await res.json();
-        if (data.success) {
-          document.getElementById("adminName").textContent = data.admin.Name;
-          document.getElementById("adminEmail").textContent = data.admin.Email;
-          document.getElementById("adminMobile").textContent = data.admin.Mobile || 'N/A';
-          document.getElementById("adminStation").textContent = data.admin.StationLocation || 'N/A';
-          document.getElementById("adminNameNav").textContent = data.admin.Name;
+        // 🌙 DARK MODE LOGIC START
+        const body = document.body;
+        const darkModeToggle = document.getElementById('btn-toggle-darkmode');
+        
+        // Function to set the theme
+        function setDarkMode(isDark) {
+            if (isDark) {
+                body.classList.add('dark-mode');
+                localStorage.setItem('theme', 'dark');
+                darkModeToggle.innerHTML = '☀️ Light Mode';
+                darkModeToggle.classList.remove('btn-secondary');
+                darkModeToggle.classList.add('btn-info'); // Use a bright color for contrast
+            } else {
+                body.classList.remove('dark-mode');
+                localStorage.setItem('theme', 'light');
+                darkModeToggle.innerHTML = '🌙 Dark Mode';
+                darkModeToggle.classList.remove('btn-info');
+                darkModeToggle.classList.add('btn-secondary');
+            }
         }
-      } catch (err) { console.error(err); }
-    }
 
-    // 🔹 Profile Button Click
-    document.getElementById("btn-toggle-profile").addEventListener("click", () => {
-      const profile = document.getElementById("adminProfileCard");
-      const isHidden = profile.style.display === "none";
-      profile.style.display = isHidden ? "block" : "none";
-      if (isHidden) loadAdminProfile(); // only load when showing
-    });
-
-    function logout() {
-      localStorage.removeItem("token");
-      window.location.href = "admin-login";
-    }
-
-    // 🔹 RESCUERS
-    async function showActiveRescuers() {
-      try {
-        const res = await fetch(`${SERVER_URL}/rescuer/active`);
-        const data = await res.json();
-        const container = document.getElementById("rescuerListContainer");
-        container.innerHTML = "";
-        if (!data || data.length === 0) {
-          container.innerHTML = "<p>No rescuers are currently logged in.</p>";
-          return;
-        }
-        data.forEach(rescuer => {
-          const rescuerDiv = document.createElement("div");
-          rescuerDiv.classList.add("border", "p-2", "mb-2", "rounded");
-          rescuerDiv.innerHTML = `
-            <strong>${rescuer.Name}</strong> | Email: ${rescuer.Email} | Role: 
-            <select>
-              <option value="Ambulance">Ambulance</option>
-              <option value="Fire Station">Fire Station</option>
-              <option value="Police">Police</option>
-            </select> 
-            | Mobile: ${rescuer.Mobile || 'N/A'} | Station: ${rescuer.StationLocation || 'N/A'}
-          `;
-          container.appendChild(rescuerDiv);
+        // Check saved preference on load
+        document.addEventListener('DOMContentLoaded', () => {
+            const savedTheme = localStorage.getItem('theme');
+            if (savedTheme === 'dark') {
+                setDarkMode(true);
+            } else {
+                // Initialize to light mode, which is the default CSS state
+                setDarkMode(false);
+            }
         });
-        document.getElementById("activeRescuers").textContent = data.length;
-      } catch (err) {
-        console.error(err);
-        document.getElementById("rescuerListContainer").innerHTML = "<p class='text-danger'>Failed to load active rescuers.</p>";
-      }
-    }
 
-    document.getElementById("btn-show-rescuers").addEventListener("click", showActiveRescuers);
-
-    // 🔹 INCIDENTS
-    async function loadIncidents() {
-      const table = document.querySelector("#incidentTable tbody");
-      table.innerHTML = "<tr><td colspan='7'>Loading...</td></tr>";
-      try {
-        const res = await fetch(`${SERVER_URL}/incidents`);
-        const data = await res.json();
-        if (!data.success) throw new Error("Failed to fetch incidents");
-        allIncidents = data.incidents;
-        applyFilters();
-      } catch (err) {
-        console.error(err);
-        table.innerHTML = `<tr><td colspan='7' class='text-danger'>Error loading incidents</td></tr>`;
-      }
-    }
-
-    function applyFilters() {
-      const status = document.getElementById("statusFilter").value;
-      const barangay = document.getElementById("barangayFilter").value.toLowerCase();
-      const dateRange = document.getElementById("dateFilter").value;
-      const startDate = document.getElementById("startDate").value ? new Date(document.getElementById("startDate").value) : null;
-      const endDate = document.getElementById("endDate").value ? new Date(document.getElementById("endDate").value) : null;
-
-      let filtered = allIncidents.filter(i => {
-        let statusMatch = !status || i.Status === status;
-        let barangayMatch = !barangay || (i.Location && i.Location.toLowerCase().includes(barangay));
-        let dateMatch = true;
-        const createdAt = new Date(i.CreatedAt);
-
-        if (dateRange === "week") {
-          const now = new Date();
-          const weekStart = new Date(now.setDate(now.getDate() - now.getDay()));
-          dateMatch = createdAt >= weekStart;
-        } else if (dateRange === "month") {
-          const now = new Date();
-          dateMatch = createdAt.getMonth() === now.getMonth() && createdAt.getFullYear() === now.getFullYear();
-        } else if (dateRange === "custom" && startDate && endDate) {
-          dateMatch = createdAt >= startDate && createdAt <= endDate;
-        }
-        return statusMatch && barangayMatch && dateMatch;
-      });
-
-      if (sortOrder.column) {
-        filtered.sort((a,b) => {
-          const valA = a[sortOrder.column];
-          const valB = b[sortOrder.column];
-          if (valA < valB) return sortOrder.ascending ? -1 : 1;
-          if (valA > valB) return sortOrder.ascending ? 1 : -1;
-          return 0;
+        // Event listener for the toggle button
+        darkModeToggle.addEventListener('click', () => {
+            const isDark = body.classList.contains('dark-mode');
+            setDarkMode(!isDark);
         });
-      }
+        // 🌙 DARK MODE LOGIC END
 
-      updateSummary(filtered);
-      renderTable(filtered);
-      renderCharts(filtered);
-      renderLineChart(filtered);
-    }
 
-    function sortTable(column) {
-      if (sortOrder.column === column) sortOrder.ascending = !sortOrder.ascending;
-      else { sortOrder.column = column; sortOrder.ascending = true; }
-      applyFilters();
-    }
+        // 🔹 ADMIN PROFILE
+        async function loadAdminProfile() {
+            try {
+                const res = await fetch(`${SERVER_URL}/admins/me`, {
+                    headers: { "Authorization": `Bearer ${localStorage.getItem("token")}` }
+                });
+                const data = await res.json();
+                if (data.success) {
+                    document.getElementById("adminName").textContent = data.admin.Name;
+                    document.getElementById("adminEmail").textContent = data.admin.Email;
+                    document.getElementById("adminMobile").textContent = data.admin.Mobile || 'N/A';
+                    document.getElementById("adminStation").textContent = data.admin.StationLocation || 'N/A';
+                    document.getElementById("adminNameNav").textContent = data.admin.Name;
+                }
+            } catch (err) { console.error(err); }
+        }
 
-    function updateSummary(incidents) {
-      document.getElementById("totalIncidents").textContent = incidents.length;
-      document.getElementById("pendingCases").textContent = incidents.filter(i => i.Status === "Pending").length;
-      document.getElementById("completedCases").textContent = incidents.filter(i => i.Status === "Resolved").length;
-    }
+        // 🔹 Profile Button Click
+        document.getElementById("btn-toggle-profile").addEventListener("click", () => {
+            const profile = document.getElementById("adminProfileCard");
+            const isHidden = profile.style.display === "none";
+            profile.style.display = isHidden ? "block" : "none";
+            if (isHidden) loadAdminProfile(); // only load when showing
+        });
 
-    function renderTable(incidents) {
-      const table = document.querySelector("#incidentTable tbody");
-      table.innerHTML = incidents.map(i => `
-        <tr onclick="showIncidentMap('${i.Location}', ${i.Latitude}, ${i.Longitude})" style="cursor:pointer;">
-          <td>${i.Id}</td>
-          <td>${i.Type}</td>
-          <td>${i.Location}</td>
-          <td>${i.Status}</td>
-          <td>${i.UserId}</td>
-          <td>${i.RescuerId || '—'}</td>
-          <td>${new Date(i.CreatedAt).toLocaleString()}</td>
-        </tr>
-      `).join('') || "<tr><td colspan='7'>No records found</td></tr>";
-    }
+        function logout() {
+            localStorage.removeItem("token");
+            window.location.href = "admin-login";
+        }
 
-    // 🔹 FIXED MAP FUNCTION
-    function showIncidentMap(location, lat, lng) {
-      const mapFrame = document.getElementById("mapFrame");
+        // 🔹 RESCUERS
+        async function showActiveRescuers() {
+            try {
+                const res = await fetch(`${SERVER_URL}/rescuer/active`);
+                const data = await res.json();
+                const container = document.getElementById("rescuerListContainer");
+                container.innerHTML = "";
+                if (!data || data.length === 0) {
+                    container.innerHTML = "<p>No rescuers are currently logged in.</p>";
+                    return;
+                }
+                data.forEach(rescuer => {
+                    const rescuerDiv = document.createElement("div");
+                    rescuerDiv.classList.add("border", "p-2", "mb-2", "rounded");
+                    rescuerDiv.innerHTML = `
+                        <strong>${rescuer.Name}</strong> | Email: ${rescuer.Email} | Role: 
+                        <select>
+                            <option value="Ambulance">Ambulance</option>
+                            <option value="Fire Station">Fire Station</option>
+                            <option value="Police">Police</option>
+                        </select> 
+                        | Mobile: ${rescuer.Mobile || 'N/A'} | Station: ${rescuer.StationLocation || 'N/A'}
+                    `;
+                    container.appendChild(rescuerDiv);
+                });
+                document.getElementById("activeRescuers").textContent = data.length;
+            } catch (err) {
+                console.error(err);
+                document.getElementById("rescuerListContainer").innerHTML = "<p class='text-danger'>Failed to load active rescuers.</p>";
+            }
+        }
 
-      if (lat && lng) {
-        const latitude = parseFloat(lat);
-        const longitude = parseFloat(lng);
-        mapFrame.src = `https://www.google.com/maps?q=${latitude},${longitude}&hl=en&z=15&output=embed`;
-      } else {
-        mapFrame.src = `https://www.google.com/maps?q=${encodeURIComponent(location)}&hl=en&z=15&output=embed`;
-      }
+        document.getElementById("btn-show-rescuers").addEventListener("click", showActiveRescuers);
 
-      const mapModal = new bootstrap.Modal(document.getElementById("mapModal"));
-      mapModal.show();
-    }
+        // 🔹 INCIDENTS
+        async function loadIncidents() {
+            const table = document.querySelector("#incidentTable tbody");
+            table.innerHTML = "<tr><td colspan='7'>Loading...</td></tr>";
+            try {
+                const res = await fetch(`${SERVER_URL}/incidents`);
+                const data = await res.json();
+                if (!data.success) throw new Error("Failed to fetch incidents");
+                allIncidents = data.incidents;
+                applyFilters();
+            } catch (err) {
+                console.error(err);
+                table.innerHTML = `<tr><td colspan='7' class='text-danger'>Error loading incidents</td></tr>`;
+            }
+        }
 
-    function renderCharts(incidents) {
-      const typeCounts = {};
-      const statusCounts = {};
+        function applyFilters() {
+            const status = document.getElementById("statusFilter").value;
+            const barangay = document.getElementById("barangayFilter").value.toLowerCase();
+            const dateRange = document.getElementById("dateFilter").value;
+            const startDate = document.getElementById("startDate").value ? new Date(document.getElementById("startDate").value) : null;
+            const endDate = document.getElementById("endDate").value ? new Date(document.getElementById("endDate").value) : null;
+            const searchTerm = document.getElementById("incidentSearch").value.toLowerCase();
 
-      incidents.forEach(i => {
-        typeCounts[i.Type] = (typeCounts[i.Type] || 0) + 1;
-        statusCounts[i.Status] = (statusCounts[i.Status] || 0) + 1;
-      });
+            let filtered = allIncidents.filter(i => {
+                let statusMatch = !status || i.Status === status;
+                let barangayMatch = !barangay || (i.Location && i.Location.toLowerCase().includes(barangay));
+                let dateMatch = true;
+                const createdAt = new Date(i.CreatedAt);
 
-      if (window.typeChartInstance) window.typeChartInstance.destroy();
-      if (window.statusChartInstance) window.statusChartInstance.destroy();
+                // Search term match logic
+                let searchMatch = true;
+                if (searchTerm) {
+                    const incidentId = String(i.Id).toLowerCase();
+                    const incidentType = i.Type ? i.Type.toLowerCase() : '';
+                    const incidentLocation = i.Location ? i.Location.toLowerCase() : '';
+                    searchMatch = incidentId.includes(searchTerm) || incidentType.includes(searchTerm) || incidentLocation.includes(searchTerm);
+                }
 
-      window.typeChartInstance = new Chart(document.getElementById("typeChart"), {
-        type: 'pie',
-        data: { labels: Object.keys(typeCounts), datasets: [{ data: Object.values(typeCounts), backgroundColor: ['#007bff','#28a745','#ffc107','#dc3545','#17a2b8'] }] }
-      });
+                if (dateRange === "week") {
+                    const now = new Date();
+                    const weekStart = new Date(now.setDate(now.getDate() - now.getDay()));
+                    dateMatch = createdAt >= weekStart;
+                } else if (dateRange === "month") {
+                    const now = new Date();
+                    dateMatch = createdAt.getMonth() === now.getMonth() && createdAt.getFullYear() === now.getFullYear();
+                } else if (dateRange === "custom" && startDate && endDate) {
+                    dateMatch = createdAt >= startDate && createdAt <= endDate;
+                }
+                return statusMatch && barangayMatch && dateMatch && searchMatch;
+            });
 
-      window.statusChartInstance = new Chart(document.getElementById("statusChart"), {
-        type: 'bar',
-        data: { labels: Object.keys(statusCounts), datasets: [{ label: 'Number of Incidents', data: Object.values(statusCounts), backgroundColor: ['#ffc107','#007bff','#28a745'] }] },
-        options: { scales: { y: { beginAtZero: true } } }
-      });
-    }
+            if (sortOrder.column) {
+                filtered.sort((a,b) => {
+                    const valA = a[sortOrder.column];
+                    const valB = b[sortOrder.column];
+                    if (valA < valB) return sortOrder.ascending ? -1 : 1;
+                    if (valA > valB) return sortOrder.ascending ? 1 : -1;
+                    return 0;
+                });
+            }
 
-    function renderLineChart(incidents) {
-      const countsByDate = {};
-      incidents.forEach(i => {
-        const date = new Date(i.CreatedAt).toLocaleDateString();
-        countsByDate[date] = (countsByDate[date] || 0) + 1;
-      });
-      const labels = Object.keys(countsByDate).sort((a,b) => new Date(a)-new Date(b));
-      const data = labels.map(d => countsByDate[d]);
+            updateSummary(filtered);
+            renderTable(filtered);
+            renderCharts(filtered);
+            renderLineChart(filtered);
+        }
 
-      if (window.lineChartInstance) window.lineChartInstance.destroy();
+        function sortTable(column) {
+            if (sortOrder.column === column) sortOrder.ascending = !sortOrder.ascending;
+            else { sortOrder.column = column; sortOrder.ascending = true; }
+            applyFilters();
+        }
 
-      window.lineChartInstance = new Chart(document.getElementById("lineChart"), {
-        type: 'line',
-        data: { labels, datasets: [{ label:'Incidents per Day', data, borderColor:'#007bff', backgroundColor:'rgba(0,123,255,0.2)', tension:0.3, fill:true }] },
-        options: { scales: { y: { beginAtZero:true } } }
-      });
-    }
+        function updateSummary(incidents) {
+            document.getElementById("totalIncidents").textContent = incidents.length;
+            document.getElementById("pendingCases").textContent = incidents.filter(i => i.Status === "Pending").length;
+            document.getElementById("completedCases").textContent = incidents.filter(i => i.Status === "Resolved").length;
+        }
 
-    // 🔹 EVENT LISTENERS
-    document.getElementById("statusFilter").addEventListener("change", applyFilters);
-    document.getElementById("barangayFilter").addEventListener("change", applyFilters);
-    document.getElementById("dateFilter").addEventListener("change", () => {
-      const value = document.getElementById("dateFilter").value;
-      const startInput = document.getElementById("startDate");
-      const endInput = document.getElementById("endDate");
-      if (value === "custom") { startInput.classList.remove("d-none"); endInput.classList.remove("d-none"); }
-      else { startInput.classList.add("d-none"); endInput.classList.add("d-none"); }
-      applyFilters();
-    });
-    document.getElementById("startDate").addEventListener("change", applyFilters);
-    document.getElementById("endDate").addEventListener("change", applyFilters);
+        function renderTable(incidents) {
+            const table = document.querySelector("#incidentTable tbody");
+            table.innerHTML = incidents.map(i => `
+                <tr onclick="showIncidentMap('${i.Location}', ${i.Latitude}, ${i.Longitude})" style="cursor:pointer;">
+                    <td>${i.Id}</td>
+                    <td>${i.Type}</td>
+                    <td>${i.Location}</td>
+                    <td>${i.Status}</td>
+                    <td>${i.UserId}</td>
+                    <td>${i.RescuerId || '—'}</td>
+                    <td>${new Date(i.CreatedAt).toLocaleString()}</td>
+                </tr>
+            `).join('') || "<tr><td colspan='7'>No records found</td></tr>";
+        }
 
-    // 🔹 LOAD ALL DATA
-    function loadData() {
-      showActiveRescuers();
-      loadIncidents();
-    }
+        // 🔹 FIXED MAP FUNCTION
+        function showIncidentMap(location, lat, lng) {
+            const mapFrame = document.getElementById("mapFrame");
+            let mapUrl = "";
 
-    setInterval(loadData, 10000);
-    loadData();
-  </script>
+            // NOTE: The previous map URLs were incomplete/malformed. 
+            // This structure creates a standard Google Maps embed URL using the provided data.
+            // You must use a valid API key and embed URL format for this to work in a real application.
+            // For now, it uses a generic example structure.
+
+            if (lat && lng) {
+                const latitude = parseFloat(lat);
+                const longitude = parseFloat(lng);
+                // Standard Google Maps Embed URL format using coordinates
+                mapUrl = `https://maps.google.com/maps?q=${latitude},${longitude}&hl=en&z=15&output=embed`;
+            } else {
+                // Standard Google Maps Embed URL format using location search term
+                mapUrl = `https://maps.google.com/maps?q=${encodeURIComponent(location)}&hl=en&z=15&output=embed`;
+            }
+            
+            mapFrame.src = mapUrl;
+            document.querySelector('#mapModal .modal-title').textContent = `Incident Location: ${location}`;
+
+            const mapModal = new bootstrap.Modal(document.getElementById("mapModal"));
+            mapModal.show();
+        }
+
+        // 🔹 CHART FUNCTIONS
+        function renderCharts(incidents) {
+            const typeCounts = {};
+            const statusCounts = {};
+
+            incidents.forEach(i => {
+                typeCounts[i.Type] = (typeCounts[i.Type] || 0) + 1;
+                statusCounts[i.Status] = (statusCounts[i.Status] || 0) + 1;
+            });
+
+            if (window.typeChartInstance) window.typeChartInstance.destroy();
+            if (window.statusChartInstance) window.statusChartInstance.destroy();
+
+            window.typeChartInstance = new Chart(document.getElementById("typeChart"), {
+                type: 'pie',
+                data: { 
+                    labels: Object.keys(typeCounts), 
+                    datasets: [{ 
+                        data: Object.values(typeCounts), 
+                        backgroundColor: ['#3f51b5','#4CAF50','#ffc107','#dc3545','#03a9f4'] 
+                    }] 
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: {
+                            position: 'right',
+                        },
+                        title: {
+                            display: false,
+                        }
+                    }
+                }
+            });
+
+            window.statusChartInstance = new Chart(document.getElementById("statusChart"), {
+                type: 'bar',
+                data: { 
+                    labels: Object.keys(statusCounts), 
+                    datasets: [{ 
+                        label: 'Number of Incidents', 
+                        data: Object.values(statusCounts), 
+                        backgroundColor: ['#ffc107','#3f51b5','#4CAF50'] /* Amber, Indigo, Green */
+                    }] 
+                },
+                options: { 
+                    responsive: true,
+                    scales: { 
+                        y: { 
+                            beginAtZero: true,
+                            grid: {
+                                color: 'rgba(0,0,0,0.05)'
+                            }
+                        },
+                        x: {
+                            grid: {
+                                color: 'rgba(0,0,0,0.05)'
+                            }
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            display: false,
+                        },
+                        title: {
+                            display: false,
+                        }
+                    }
+                }
+            });
+        }
+
+        function renderLineChart(incidents) {
+            const countsByDate = {};
+            incidents.forEach(i => {
+                const date = new Date(i.CreatedAt).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+                countsByDate[date] = (countsByDate[date] || 0) + 1;
+            });
+            const labels = Object.keys(countsByDate).sort((a,b) => new Date(a)-new Date(b));
+            const data = labels.map(d => countsByDate[d]);
+
+            if (window.lineChartInstance) window.lineChartInstance.destroy();
+
+            window.lineChartInstance = new Chart(document.getElementById("lineChart"), {
+                type: 'line',
+                data: { 
+                    labels, 
+                    datasets: [{ 
+                        label:'Incidents per Day', 
+                        data, 
+                        borderColor:'#03a9f4', /* Light Blue */
+                        backgroundColor:'rgba(3, 169, 244, 0.1)', /* Very light blue fill */
+                        tension:0.3, 
+                        fill:true,
+                        pointBackgroundColor: '#03a9f4',
+                        pointBorderColor: '#fff',
+                        pointHoverBackgroundColor: '#fff',
+                        pointHoverBorderColor: '#03a9f4'
+                    }] 
+                },
+                options: { 
+                    responsive: true,
+                    scales: { 
+                        y: { 
+                            beginAtZero:true,
+                            grid: {
+                                color: 'rgba(0,0,0,0.05)'
+                            }
+                        },
+                        x: {
+                            grid: {
+                                color: 'rgba(0,0,0,0.05)'
+                            }
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            display: true,
+                            position: 'top',
+                        },
+                        title: {
+                            display: false,
+                        }
+                    }
+                }
+            });
+        }
+
+        // 🔹 EVENT LISTENERS
+        document.getElementById("statusFilter").addEventListener("change", applyFilters);
+        document.getElementById("barangayFilter").addEventListener("change", applyFilters);
+        document.getElementById("incidentSearch").addEventListener("input", applyFilters);
+        
+        document.getElementById("dateFilter").addEventListener("change", () => {
+            const value = document.getElementById("dateFilter").value;
+            const startInput = document.getElementById("startDate");
+            const endInput = document.getElementById("endDate");
+            if (value === "custom") { 
+                startInput.classList.remove("d-none"); 
+                endInput.classList.remove("d-none"); 
+            } else { 
+                startInput.classList.add("d-none"); 
+                endInput.classList.add("d-none"); 
+            }
+            applyFilters();
+        });
+        document.getElementById("startDate").addEventListener("change", applyFilters);
+        document.getElementById("endDate").addEventListener("change", applyFilters);
+
+        // 🔹 LOAD ALL DATA
+        function loadData() {
+            showActiveRescuers();
+            loadIncidents();
+            // loadAdminProfile is intentionally called only when the profile card is toggled, 
+            // but you might want to call it on page load to populate the navbar name.
+            // loadAdminProfile(); 
+        }
+
+        // Set interval to refresh data every 10 seconds
+        setInterval(loadData, 10000);
+        // Initial data load
+        loadData();
+    </script>
 
 </body>
 </html>

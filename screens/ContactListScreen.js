@@ -14,8 +14,7 @@ import {
 } from "react-native";
 import { ThemeContext } from "../ThemeContext";
 import axios from "axios";
-
-const SERVER_URL = "http://192.168.0.111:3000";
+import { SERVER_URL } from "../config"; 
 
 export default function ContactListScreen({ route, navigation }) {
   const { isDarkMode } = useContext(ThemeContext);

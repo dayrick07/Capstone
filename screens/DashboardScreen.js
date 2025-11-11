@@ -1,4 +1,4 @@
-import React, { useState, useContext } from "react";
+import React, { useState, useContext, useEffect } from "react";
 import {
   View,
   Text,
@@ -19,24 +19,23 @@ import { ThemeContext } from "../ThemeContext";
 import * as ImagePicker from "expo-image-picker";
 import * as Location from "expo-location";
 import axios from "axios";
+// Assuming you have a file named config.js in the parent directory containing SERVER_URL
+import { SERVER_URL } from "../config";
 
-// Hotline numbers: CONSOLIDATED TO ONLY 911
-const UNIFIED_EMERGENCY_NUMBER = "tel:911"; // 🚨 Use 911 for all services
+const UNIFIED_EMERGENCY_NUMBER = "tel:911";
 
-// Icons (remain the same for visual classification)
+// All required icons
 const icons = {
   police: require("../assets/police.png"),
   hospital: require("../assets/hospital.png"),
   firestation: require("../assets/firestation.png"),
-  shortcuts: require("../assets/shortcuts.png"),
-  setup: require("../assets/setup.png"),
-  nearby: require("../assets/nearby.png"),
   album: require("../assets/album.png"),
   contacts: require("../assets/contacts.png"),
+  nearby: require("../assets/nearby.png"), 
+  shortcuts: require("../assets/shortcuts.png"),
+  setup: require("../assets/setup.png"),
+  parentPanel: require("../assets/parentPanel.png"), 
 };
-
-// Set server URL
-const SERVER_URL = "http://192.168.0.111:3000"; // ⚙️ your backend IP
 
 export default function DashboardScreen({ navigation, route }) {
   const [menuVisible, setMenuVisible] = useState(false);
@@ -44,168 +43,17 @@ export default function DashboardScreen({ navigation, route }) {
 
   const loggedInUser = route.params?.userData;
 
-  if (!loggedInUser) {
-    navigation.replace("LoginScreen");
-    return null;
-  }
-
-  // --------------------------- REPORT INCIDENT ---------------------------
-  const reportIncident = async (service) => {
-    try {
-      // 1️⃣ Ask for location permission
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== "granted") {
-        Alert.alert(
-          "Permission Denied",
-          "Location access is required to report incidents."
-        );
-        return;
-      }
-
-      // 2️⃣ Get coordinates
-      const { coords } = await Location.getCurrentPositionAsync({});
-      const { latitude, longitude } = coords;
-
-      // 3️⃣ Convert to readable address
-      const [address] = await Location.reverseGeocodeAsync({
-        latitude,
-        longitude,
-      });
-      const locationText = `${address.name || ""}, ${address.city || ""}, ${
-        address.region || ""
-      }`;
-
-      // 4️⃣ Send to backend with UserId only
-      const response = await axios.post(`${SERVER_URL}/incidents`, {
-        Type: service,
-        Location: locationText,
-        Latitude: latitude,
-        Longitude: longitude,
-        Status: "Pending",
-        UserId: loggedInUser.Id, // required
-      });
-
-      if (response.data.success) {
-        Alert.alert("✅ Success", "Incident reported!");
-      }
-    } catch (err) {
-      console.error(
-        "❌ Error reporting incident:",
-        err.response?.data || err.message
-      );
-      Alert.alert(
-        "Error",
-        "Failed to report incident. Make sure your server is running and reachable."
-      );
+  // Redirect to login if user data is missing
+  useEffect(() => {
+    if (!loggedInUser) {
+      navigation.reset({ index: 0, routes: [{ name: "LoginScreen" }] });
     }
-  };
+  }, [loggedInUser, navigation]);
 
-  // --------------------------- EMERGENCY CALL (NOW USES 911) ---------------------------
-  const handleEmergencyCall = (service) => {
-    // Note: 'number' parameter is no longer needed as it's hardcoded to 911
-    Alert.alert(
-      `${service} Assistance (Calling 911)`,
-      `Do you need help from ${service}? This will dial the emergency number.`, // Simplified message
-      [
-        { text: "No", style: "cancel" },
-        {
-          text: "Yes, Call Now",
-          onPress: async () => {
-            // Report incident first
-            await reportIncident(service);
-            
-            // Initiate 911 call
-            const supported = await Linking.canOpenURL(UNIFIED_EMERGENCY_NUMBER);
-            if (supported) await Linking.openURL(UNIFIED_EMERGENCY_NUMBER);
-            else Alert.alert("Error", "Cannot open dialer.");
-          },
-        },
-      ]
-    );
-  };
+  if (!loggedInUser) return null;
 
-  // ✅ NEW: Unified Emergency Report for the Big Button
-  const handleBigEmergencyButton = () => {
-      Alert.alert(
-          "🚨 Emergency Report (Dialing 911)",
-          "Select the service needed. We will notify the system and dial 911.",
-          [
-              { text: "Cancel", style: "cancel" },
-              // Each button now calls handleEmergencyCall with the service type
-              { text: "Police", onPress: () => handleEmergencyCall("Police") },
-              { text: "Fire Station", onPress: () => handleEmergencyCall("Fire Station") },
-              { text: "Ambulance", onPress: () => handleEmergencyCall("Ambulance") },
-          ]
-      );
-  };
-
-
-  // --------------------------- RECORD / PICK MEDIA ---------------------------
-  const handleRecordVideoChoice = () => {
-    Alert.alert("Record or Select", "Choose an option:", [
-      { text: "Cancel", style: "cancel" },
-      { text: "Record New Video", onPress: recordVideo },
-      { text: "Choose from Gallery", onPress: pickMedia },
-    ]);
-  };
-
-  const recordVideo = async () => {
-    const permission = await ImagePicker.requestCameraPermissionsAsync();
-    if (!permission.granted) {
-      Alert.alert("Permission Denied", "Camera access is required.");
-      return;
-    }
-
-    const result = await ImagePicker.launchCameraAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Videos,
-      allowsEditing: false,
-      quality: 1,
-    });
-
-    if (!result.canceled) {
-      askToSend(result.assets[0]);
-    }
-  };
-
-  const pickMedia = async () => {
-    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!permission.granted) {
-      Alert.alert("Permission Denied", "Media access is required.");
-      return;
-    }
-
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.All,
-      allowsEditing: false,
-      quality: 1,
-    });
-
-    if (!result.canceled) {
-      askToSend(result.assets[0]);
-    }
-  };
-
-  const askToSend = (file) => {
-    Alert.alert(
-      "Send to Rescuer?",
-      `Would you like to send this ${
-        file.type === "video" ? "video" : "image"
-      }?`,
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Send",
-          onPress: () => {
-            console.log("Sending file:", file.uri);
-            Alert.alert("Success", "Media sent to rescuer!");
-          },
-        },
-      ]
-    );
-  };
-
-  // Improved Theme Styles
-  const primaryColor = "#A83232"; // The existing red color
+  // --- THEME STYLES (Moved to top of component for use in hooks/functions) ---
+  const primaryColor = "#A83232";
   const themeStyles = {
     container: {
       backgroundColor: isDarkMode ? "#0E0E0E" : "#F4F4F9",
@@ -221,95 +69,185 @@ export default function DashboardScreen({ navigation, route }) {
     text: { color: isDarkMode ? "#E0E0E0" : "#333333" },
     menuContainer: { backgroundColor: isDarkMode ? "#1E1E1E" : "#fff" },
     menuText: { color: isDarkMode ? "#fff" : "#333" },
-    headerText: { color: "#fff" },
-    bigButton: {
-      backgroundColor: primaryColor,
-      shadowColor: primaryColor,
-      shadowOpacity: 0.4,
-    },
+    bigButton: { backgroundColor: primaryColor },
+  };
+  // --------------------------------------------------------------------------
+
+  // --------------------------- REPORT INCIDENT ---------------------------
+  const reportIncident = async (service, immediateCall = false) => {
+    try {
+      let { status } = await Location.getForegroundPermissionsAsync();
+      if (status !== "granted") {
+        status = (await Location.requestForegroundPermissionsAsync()).status;
+      }
+      if (status !== "granted") {
+        Alert.alert("Permission Denied", "Location access is required.");
+        return false;
+      }
+
+      const { coords } = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.High,
+      });
+      const { latitude, longitude } = coords;
+      const [address] = await Location.reverseGeocodeAsync({ latitude, longitude });
+      const locationText = `${address.name || ""}, ${address.city || ""}, ${address.region || ""}`;
+
+      const response = await axios.post(`${SERVER_URL}/incidents`, {
+        Type: service,
+        Location: locationText,
+        Latitude: latitude,
+        Longitude: longitude,
+        Status: immediateCall ? "Calling 911" : "Pending",
+        UserId: loggedInUser.Id,
+      });
+
+      if (response.data.success && !immediateCall) {
+        Alert.alert("✅ Success", "Incident reported to system!");
+      }
+      return response.data.success;
+    } catch (err) {
+      console.error(err);
+      Alert.alert("Error", "Failed to report incident. Check server connectivity.");
+      return false;
+    }
+  };
+
+  // --------------------------- EMERGENCY CALL ---------------------------
+  const handleEmergencyCall = async (service) => {
+    Alert.alert(
+      `Call ${service} (Dialing 911)`,
+      `Are you sure you want to call 911 and report a ${service} emergency? Your location will be sent to the system.`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Call 911",
+          onPress: async () => {
+            const success = await reportIncident(service, true);
+            if (success) {
+              const supported = await Linking.canOpenURL(UNIFIED_EMERGENCY_NUMBER);
+              if (supported) await Linking.openURL(UNIFIED_EMERGENCY_NUMBER);
+              else Alert.alert("Dialer Error", "Cannot open dialer.");
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleBigEmergencyButton = () => {
+    Alert.alert("🚨 EMERGENCY", "Select a service to contact 911:", [
+      { text: "Cancel", style: "cancel" },
+      { text: "Police", onPress: () => handleEmergencyCall("Police") },
+      { text: "Fire Station", onPress: () => handleEmergencyCall("Fire Station") },
+      { text: "Ambulance", onPress: () => handleEmergencyCall("Ambulance") },
+    ]);
+  };
+
+  /* -------------------------------------------------------------------------- */
+
+  // --------------------------- MEDIA HANDLERS ---------------------------
+  const handleRecordVideoChoice = () => {
+    Alert.alert("Record or Select", "Choose an option:", [
+      { text: "Cancel", style: "cancel" },
+      { text: "Record New Video", onPress: recordVideo },
+      { text: "Choose from Gallery", onPress: pickMedia },
+    ]);
+  };
+
+  const recordVideo = async () => {
+    const permission = await ImagePicker.requestCameraPermissionsAsync();
+    if (!permission.granted) return Alert.alert("Permission Denied", "Camera access is required.");
+    const result = await ImagePicker.launchCameraAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Videos,
+      allowsEditing: false,
+      quality: 1,
+    });
+    if (!result.canceled) askToSend(result.assets[0]);
+  };
+
+  const pickMedia = async () => {
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permission.granted) return Alert.alert("Permission Denied", "Media access is required.");
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.All,
+      allowsEditing: false,
+      quality: 1,
+    });
+    if (!result.canceled) askToSend(result.assets[0]);
+  };
+
+  const askToSend = (file) => {
+    Alert.alert(
+      "Send to Rescuer?",
+      `Would you like to send this ${file.type === "video" ? "video" : "image"}?`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Send",
+          onPress: () => {
+            Alert.alert("Success", "Media sent to rescuer!");
+          },
+        },
+      ]
+    );
   };
 
   return (
     <SafeAreaView style={[styles.safeArea, { backgroundColor: primaryColor }]}>
-      <ScrollView
-        contentContainerStyle={[
-          styles.scrollContent,
-          themeStyles.container,
-          { paddingTop: 0 },
-        ]}
-      >
+      <ScrollView contentContainerStyle={[styles.scrollContent, themeStyles.container]}>
         {/* Header */}
         <View style={[styles.header, { backgroundColor: primaryColor }]}>
           <TouchableOpacity onPress={() => setMenuVisible(true)}>
             <Icon name="menu" size={28} color="#fff" />
           </TouchableOpacity>
-
           <Text style={styles.headerTitle}>Safe Ka Fernandino!</Text>
-
           <View style={styles.headerRight}>
             <TouchableOpacity onPress={toggleTheme} style={{ marginRight: 10 }}>
-              <Ionicons
-                name={isDarkMode ? "sunny-outline" : "moon-outline"}
-                size={24}
-                color="#fff"
-              />
+              <Ionicons name={isDarkMode ? "sunny-outline" : "moon-outline"} size={24} color="#fff" />
             </TouchableOpacity>
-
-            <TouchableOpacity
-              onPress={() =>
-                navigation.navigate("UserPageScreen", { userData: loggedInUser })
-              }
-            >
+            <TouchableOpacity onPress={() => navigation.navigate("UserPageScreen", { userData: loggedInUser })}>
               <Icon name="account-circle" size={30} color="#fff" />
             </TouchableOpacity>
           </View>
         </View>
 
-        {/* --- Primary Emergency Button --- */}
+        {/* Big Emergency Button */}
         <View style={styles.primaryButtonContainer}>
-          <TouchableOpacity
-            style={[styles.bigButton, themeStyles.bigButton]}
-            onPress={handleBigEmergencyButton}
-          >
+          <TouchableOpacity style={[styles.bigButton, themeStyles.bigButton]} onPress={handleBigEmergencyButton}>
             <Ionicons name="warning-outline" size={60} color="#fff" />
             <Text style={styles.bigButtonText}>EMERGENCY</Text>
-            {/* Removed (911) */}
-            <Text style={styles.bigButtonSubtitle}>TAP for immediate assistance</Text> 
+            <Text style={styles.bigButtonSubtitle}>TAP for immediate assistance</Text>
           </TouchableOpacity>
         </View>
-        {/* --- End Primary Emergency Button --- */}
 
-        {/* Dashboard Buttons Grid */}
+        {/* Main Grid with All Buttons */}
         <View style={styles.grid}>
-          {/* Group 1: Emergency Hotlines */}
-          <TouchableOpacity
-            style={[styles.card, styles.emergencyCard, themeStyles.card]}
-            onPress={() => handleEmergencyCall("Police")} 
-          >
-            <Image source={icons.police} style={styles.largeIcon} />
-            {/* Removed (911) */}
-            <Text style={[styles.largeLabel, themeStyles.text]}>Police</Text> 
+          {/* Row 1: Immediate Services */}
+          <TouchableOpacity style={[styles.card, themeStyles.card]} onPress={() => handleEmergencyCall("Police")}>
+            <Image source={icons.police} style={styles.icon} />
+            <Text style={[styles.label, themeStyles.text]}>Police</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity
-            style={[styles.card, styles.emergencyCard, themeStyles.card]}
-            onPress={() => handleEmergencyCall("Ambulance")} 
-          >
-            <Image source={icons.hospital} style={styles.largeIcon} />
-            {/* Removed (911) */}
-            <Text style={[styles.largeLabel, themeStyles.text]}>Ambulance</Text>
+          <TouchableOpacity style={[styles.card, themeStyles.card]} onPress={() => handleEmergencyCall("Ambulance")}>
+            <Image source={icons.hospital} style={styles.icon} />
+            <Text style={[styles.label, themeStyles.text]}>Ambulance</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity
-            style={[styles.card, styles.emergencyCard, themeStyles.card]}
-            onPress={() => handleEmergencyCall("Fire Station")} 
-          >
-            <Image source={icons.firestation} style={styles.largeIcon} />
-            {/* Removed (911) */}
-            <Text style={[styles.largeLabel, themeStyles.text]}>Fire Station</Text>
+          <TouchableOpacity style={[styles.card, themeStyles.card]} onPress={() => handleEmergencyCall("Fire Station")}>
+            <Image source={icons.firestation} style={styles.icon} />
+            <Text style={[styles.label, themeStyles.text]}>Fire Station</Text>
           </TouchableOpacity>
 
-          {/* Group 2: Quick Actions / Features */}
+          {/* Row 2: Features - MODIFIED: Track Child replaced with Parent Screen */}
+          <TouchableOpacity
+            style={[styles.card, themeStyles.card]}
+            onPress={() => navigation.navigate("ParentScreen", { userData: loggedInUser })}
+          >
+            {/* Using a person-circle icon for Parent Panel */}
+            <Ionicons name="person-circle-outline" size={50} color={primaryColor} />
+            <Text style={[styles.label, themeStyles.text]}>Parent Screen</Text>
+          </TouchableOpacity>
+
           <TouchableOpacity
             style={[styles.card, themeStyles.card]}
             onPress={() => navigation.navigate("ContactListScreen", { userData: loggedInUser })}
@@ -318,46 +256,12 @@ export default function DashboardScreen({ navigation, route }) {
             <Text style={[styles.label, themeStyles.text]}>Emergency Contacts</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity
-            style={[styles.card, themeStyles.card]}
-            onPress={() =>
-              Alert.alert("Select Rescuer Type", "Who do you need?", [
-                {
-                  text: "Police",
-                  onPress: () =>
-                    navigation.navigate("NearbyRescuerScreen", { type: "Police" }),
-                },
-                {
-                  text: "Fire Station",
-                  onPress: () =>
-                    navigation.navigate("NearbyRescuerScreen", {
-                      type: "Fire Station",
-                    }),
-                },
-                {
-                  text: "Ambulance",
-                  onPress: () =>
-                    navigation.navigate("NearbyRescuerScreen", {
-                      type: "Ambulance",
-                    }),
-                },
-                { text: "Cancel", style: "cancel" },
-              ])
-            }
-          >
-            <Image source={icons.nearby} style={styles.icon} />
-            <Text style={[styles.label, themeStyles.text]}>Nearby Rescuer</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.card, themeStyles.card]}
-            onPress={handleRecordVideoChoice}
-          >
+          <TouchableOpacity style={[styles.card, themeStyles.card]} onPress={handleRecordVideoChoice}>
             <Image source={icons.album} style={styles.icon} />
             <Text style={[styles.label, themeStyles.text]}>Record Video</Text>
           </TouchableOpacity>
 
-          {/* Group 3: Settings / Misc */}
+          {/* Row 3: Utility/Setup (Re-added) */}
           <TouchableOpacity style={[styles.card, themeStyles.card]}>
             <Image source={icons.shortcuts} style={styles.icon} />
             <Text style={[styles.label, themeStyles.text]}>Shortcuts</Text>
@@ -365,20 +269,16 @@ export default function DashboardScreen({ navigation, route }) {
 
           <TouchableOpacity
             style={[styles.card, themeStyles.card]}
-            onPress={() => navigation.navigate("Setup")}
+            onPress={() => navigation.navigate("Setup", { userData: loggedInUser })}
           >
             <Image source={icons.setup} style={styles.icon} />
             <Text style={[styles.label, themeStyles.text]}>Set-Up</Text>
           </TouchableOpacity>
+
         </View>
 
-        {/* Slide Menu (Unchanged) */}
-        <Modal
-          animationType="slide"
-          transparent={true}
-          visible={menuVisible}
-          onRequestClose={() => setMenuVisible(false)}
-        >
+        {/* --- Menu Modal (Slide from left) --- */}
+        <Modal animationType="slide" transparent visible={menuVisible} onRequestClose={() => setMenuVisible(false)}>
           <TouchableOpacity
             style={styles.modalOverlay}
             activeOpacity={1}
@@ -386,11 +286,14 @@ export default function DashboardScreen({ navigation, route }) {
           >
             <View
               style={[styles.menuContainer, themeStyles.menuContainer]}
-              onStartShouldSetResponder={() => true}
+              onStartShouldSetResponder={() => true} // Keep modal open when touching the menu area
             >
               <Text style={[styles.menuTitle, themeStyles.menuText]}>First Aid Guides</Text>
-              {["CPRScreen", "WoundCareScreen", "SkinBurnScreen", "TutorialScreen"].map(
-                (screen, i) => (
+
+              {/* Loop for First Aid Screens */}
+              {["CPRScreen", "WoundCareScreen", "SkinBurnScreen", "TutorialScreen"].map((screen, i) => {
+                const menuTitle = screen.replace("Screen", "").replace(/([A-Z])/g, " $1").trim();
+                return (
                   <TouchableOpacity
                     key={i}
                     style={styles.menuItem}
@@ -400,69 +303,55 @@ export default function DashboardScreen({ navigation, route }) {
                     }}
                   >
                     <Text style={[styles.menuText, themeStyles.menuText]}>
-                      {screen
-                        .replace("Screen", "")
-                        .replace(/([A-Z])/g, " $1")
-                        .trim()}
+                      {menuTitle}
                     </Text>
                   </TouchableOpacity>
-                )
-              )}
+                );
+              })}
 
-              <View style={styles.menuFooter}>
-                <TouchableOpacity
-                  style={styles.menuButton}
-                  onPress={() => {
-                      setMenuVisible(false);
-                      navigation.navigate("SettingsScreen");
-                  }}
-                >
-                  <Text style={[styles.menuText, themeStyles.menuText]}>
-                    ⚙️ **Settings**
-                  </Text>
-                </TouchableOpacity>
+              {/* Settings Button */}
+              <TouchableOpacity
+                style={[styles.menuItem, { marginTop: 20 }]}
+                onPress={() => {
+                  setMenuVisible(false);
+                  navigation.navigate("SettingsScreen");
+                }}
+              >
+                <Text style={[styles.menuText, themeStyles.menuText, { fontWeight: 'bold' }]}>
+                  <Icon name="settings" size={16} color={isDarkMode ? "#fff" : "#333"} />
+                  {' Settings'}
+                </Text>
+              </TouchableOpacity>
 
-                {["ReachOutScreen", "FeedbackScreen"].map((screen, i) => (
-                  <TouchableOpacity
-                    key={i}
-                    style={styles.menuItem}
-                    onPress={() => {
-                      setMenuVisible(false);
-                      navigation.navigate(screen);
-                    }}
-                  >
-                    <Text style={[styles.menuText, themeStyles.menuText]}>
-                      {screen
-                        .replace("Screen", "")
-                        .replace(/([A-Z])/g, " $1")
-                        .trim()}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-                
-                {/* Logout Button */}
-                <TouchableOpacity
-                  style={[styles.menuItem, { marginTop: 20 }]}
-                  onPress={() => {
-                      setMenuVisible(false);
-                      navigation.replace("LoginScreen");
-                  }}
-                >
-                  <Text style={[styles.menuText, { color: 'red' }]}>
-                    ➡️ **Log Out**
-                  </Text>
-                </TouchableOpacity>
-              </View>
+              {/* Log Out Button */}
+              <TouchableOpacity
+                style={styles.menuItem}
+                onPress={() => {
+                  setMenuVisible(false);
+                  navigation.replace("LoginScreen");
+                }}
+              >
+                <Text style={[styles.menuText, { color: primaryColor, fontWeight: 'bold' }]}>
+                  <Icon name="logout" size={16} color={primaryColor} />
+                  {' Log Out'}
+                </Text>
+              </TouchableOpacity>
             </View>
           </TouchableOpacity>
         </Modal>
+
       </ScrollView>
     </SafeAreaView>
   );
 }
 
+// --------------------------- STYLES ---------------------------
 const styles = StyleSheet.create({
-  safeArea: { flex: 1, paddingTop: Platform.OS === "android" ? StatusBar.currentHeight : 0 },
+  safeArea: {
+    flex: 1,
+    backgroundColor: "#A83232",
+    paddingTop: Platform.OS === "android" ? StatusBar.currentHeight : 0,
+  },
   scrollContent: { paddingBottom: 20 },
   header: {
     flexDirection: "row",
@@ -473,12 +362,7 @@ const styles = StyleSheet.create({
   },
   headerTitle: { color: "#fff", fontSize: 20, fontWeight: "bold" },
   headerRight: { flexDirection: "row", alignItems: "center" },
-
-  // --- Primary Button Styles ---
-  primaryButtonContainer: {
-    alignItems: "center",
-    marginVertical: 20,
-  },
+  primaryButtonContainer: { alignItems: "center", marginVertical: 20 },
   bigButton: {
     width: 220,
     height: 220,
@@ -487,20 +371,10 @@ const styles = StyleSheet.create({
     alignItems: "center",
     elevation: 10,
   },
-  bigButtonText: {
-    color: "#fff",
-    fontSize: 28,
-    fontWeight: "bold",
-    marginTop: 5,
-  },
-  bigButtonSubtitle: {
-    color: "#fff",
-    fontSize: 12,
-    marginTop: 2,
-    opacity: 0.8,
-  },
-  // --- End Primary Button Styles ---
+  bigButtonText: { color: "#fff", fontSize: 28, fontWeight: "bold", marginTop: 5 },
+  bigButtonSubtitle: { color: "#fff", fontSize: 12, opacity: 0.8 },
 
+  // Main Grid Layout
   grid: {
     flexDirection: "row",
     flexWrap: "wrap",
@@ -508,69 +382,39 @@ const styles = StyleSheet.create({
     paddingHorizontal: 5,
   },
   card: {
-    width: "45%",
+    width: "45%", // Two columns per row
     height: 120,
     borderRadius: 15,
     justifyContent: "center",
     alignItems: "center",
     marginBottom: 15,
     padding: 10,
+    elevation: 3, // Shadow for Android
   },
-  emergencyCard: {
-    width: "30%",
-    height: 100,
-    borderRadius: 10,
-  },
-  icon: {
-    width: 40,
-    height: 40,
-    marginBottom: 5,
-    resizeMode: "contain",
-  },
-  largeIcon: {
-    width: 50,
-    height: 50,
-    marginBottom: 5,
-    resizeMode: "contain",
-  },
-  label: {
-    fontSize: 14,
-    fontWeight: "600",
-    textAlign: "center",
-  },
-  largeLabel: {
-    fontSize: 14,
-    fontWeight: "bold",
-    textAlign: "center",
-  },
-  
-  // --- Menu Styles (Improved) ---
-  modalOverlay: { 
-    flex: 1, 
-    backgroundColor: "rgba(0,0,0,0.5)", 
+  icon: { width: 50, height: 50, marginBottom: 5, resizeMode: "contain" },
+  label: { fontSize: 14, fontWeight: "600", textAlign: "center" },
+
+  // Menu Modal Styles (Slide from left)
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.5)",
     justifyContent: "flex-start",
+    flexDirection: 'row', // Align menu to the left
   },
-  menuContainer: { 
+  menuContainer: {
     width: "75%",
-    padding: 20, 
-    height: "100%", 
+    padding: 20,
+    height: "100%",
     paddingTop: Platform.OS === "android" ? StatusBar.currentHeight + 20 : 50,
   },
   menuTitle: {
-      fontSize: 20,
-      fontWeight: 'bold',
-      marginBottom: 15,
-      borderBottomWidth: 1,
-      borderBottomColor: '#ccc',
-      paddingBottom: 5,
+    fontSize: 20,
+    fontWeight: "bold",
+    marginBottom: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#ccc',
+    paddingBottom: 5,
   },
-  menuItem: { 
-    paddingVertical: 14, 
-    borderBottomWidth: 1, 
-    borderBottomColor: '#eee',
-  },
+  menuItem: { paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: '#eee' },
   menuText: { fontSize: 16 },
-  menuFooter: { marginTop: 30 },
-  menuButton: { paddingVertical: 14 },
-  // --- End Menu Styles ---
 });
