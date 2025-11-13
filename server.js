@@ -5,7 +5,7 @@ const sql = require('mssql');
 const bcrypt = require('bcryptjs');
 const path = require('path');
 const { generateOTP } = require('./generate_otp'); 
-
+const axios = require('axios');
 const app = express();
 app.use(cors());
 app.use(bodyParser.json());
@@ -189,60 +189,67 @@ app.post('/admins/signup', async (req, res) => {
 });
 // ---------------- ✉️ SEND OTP ----------------
 app.post('/otp/send', async (req, res) => {
-    const { mobile } = req.body;
-    if (!mobile) {
-        return res.status(400).json({ success: false, message: 'Mobile number is required.' });
-    }
+    const { mobile } = req.body;
+    if (!mobile) {
+        return res.status(400).json({ success: false, message: 'Mobile number is required.' });
+    }
 
-    // 1. Generate OTP and Expiry Time
-    const otpCode = generateOTP();
-    // OTP should expire in 5 minutes
-    const expiryTime = new Date(Date.now() + 5 * 60 * 1000); 
+    // 1. Generate OTP and Expiry Time
+    const otpCode = generateOTP();
+    const expiryTime = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes
 
-    try {
-        const pool = await getPool();
+    try {
+        const pool = await getPool();
 
-        // 2. Check if user exists (Optional: Prevent spam/register only known users)
-        const userCheck = await pool.request()
-            .input('Mobile', sql.NVarChar, mobile)
-            .query('SELECT Id FROM Users WHERE Mobile = @Mobile');
-        
-        if (userCheck.recordset.length > 0) {
-            // If the user already exists, prevent re-registration verification here
-            // or allow it as a way to verify identity. We'll allow it for flexibility.
-        }
+        // 2. Optional: check if user exists
+        const userCheck = await pool.request()
+            .input('Mobile', sql.NVarChar, mobile)
+            .query('SELECT Id FROM Users WHERE Mobile = @Mobile');
 
-        // 3. Store/Update OTP in the database (Upsert pattern: Try update, if no rows, insert)
-        const updateResult = await pool.request()
-            .input('Mobile', sql.NVarChar, mobile)
-            .input('OTP', sql.NVarChar, otpCode)
-            .input('ExpiresAt', sql.DateTime, expiryTime)
-            .query(`
-                UPDATE OtpStorage 
-                SET OTP = @OTP, ExpiresAt = @ExpiresAt
-                WHERE Mobile = @Mobile;
-            `);
+        // 3. Store/Update OTP in the database (upsert)
+        const updateResult = await pool.request()
+            .input('Mobile', sql.NVarChar, mobile)
+            .input('OTP', sql.NVarChar, otpCode)
+            .input('ExpiresAt', sql.DateTime, expiryTime)
+            .query(`
+                UPDATE OtpStorage 
+                SET OTP = @OTP, ExpiresAt = @ExpiresAt
+                WHERE Mobile = @Mobile;
+            `);
 
-        if (updateResult.rowsAffected[0] === 0) {
-            // If update failed (record didn't exist), insert a new record
-            await pool.request()
-                .input('Mobile', sql.NVarChar, mobile)
-                .input('OTP', sql.NVarChar, otpCode)
-                .input('ExpiresAt', sql.DateTime, expiryTime)
-                .query(`
-                    INSERT INTO OtpStorage (Mobile, OTP, ExpiresAt)
-                    VALUES (@Mobile, @OTP, @ExpiresAt);
-                `);
-        }
+        if (updateResult.rowsAffected[0] === 0) {
+            await pool.request()
+                .input('Mobile', sql.NVarChar, mobile)
+                .input('OTP', sql.NVarChar, otpCode)
+                .input('ExpiresAt', sql.DateTime, expiryTime)
+                .query(`
+                    INSERT INTO OtpStorage (Mobile, OTP, ExpiresAt)
+                    VALUES (@Mobile, @OTP, @ExpiresAt);
+                `);
+        }
 
-        
-        console.log(`[OTP DEBUG] Sent OTP ${otpCode} to ${mobile}`);
+        // 4. Send OTP via iProgTech SMS API
+        const apiToken = 'd53783f0bbfd7010b6d873dcde2a0e34b3a824d7';
+        const message = `Fernandino, Your OTP code is: ${otpCode}`;
 
-        res.json({ success: true, message: 'OTP sent successfully.' });
-    } catch (err) {
-        console.error('❌ Send OTP Error:', err);
-        res.status(500).json({ success: false, message: 'Server error during OTP sending.' });
-    }
+        const smsResponse = await axios.post(
+            'https://sms.iprogtech.com/api/v1/sms_messages',
+            {
+                api_token: apiToken,
+                phone_number: mobile,
+                message: message
+            },
+            { headers: { 'Content-Type': 'application/json' } }
+        );
+
+        console.log(`[OTP DEBUG] Sent OTP ${otpCode} to ${mobile}`);
+        console.log('SMS API Response:', smsResponse.data);
+
+        res.json({ success: true, message: 'OTP sent successfully.' });
+    } catch (err) {
+        console.error('❌ Send OTP Error:', err.response?.data || err.message);
+        res.status(500).json({ success: false, message: 'Server error during OTP sending.' });
+    }
 });
 
 // ---------------- ✅ VERIFY OTP ----------------
