@@ -4,7 +4,7 @@ import MapView, { Marker } from "react-native-maps";
 import axios from "axios";
 import { Ionicons } from "@expo/vector-icons";
 import { ThemeContext } from "../ThemeContext";
-import { SERVER_URL } from "../config"; // Assuming this is defined
+import { SERVER_URL } from "../config"; 
 
 // Initial region for the map (defaulting to a city like San Fernando, Pampanga)
 const INITIAL_REGION = {

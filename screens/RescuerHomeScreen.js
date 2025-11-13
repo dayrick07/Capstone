@@ -10,11 +10,11 @@ import {
     Alert,
     ActivityIndicator,
     ScrollView,
+    Linking, // 👈 NEW IMPORT for phone calls
 } from "react-native";
 import axios from "axios";
 
 // NOTE: You must replace this with your actual SERVER_URL config/import
-// Ensure this IP is accessible by your mobile device/emulator (often your computer's local network IP)
 const SERVER_URL = "http://192.168.0.111:3000";
 
 // Utility function to format the timestamp
@@ -29,7 +29,7 @@ const formatTimestamp = (timestamp) => {
 };
 
 // --- CONSTANTS FOR FILTERS & COLORS ---
-const INCIDENT_TYPES = [ // Service Types Kept
+const INCIDENT_TYPES = [ 
     "Police",
     "Fire Station",
     "Ambulance",
@@ -37,8 +37,8 @@ const INCIDENT_TYPES = [ // Service Types Kept
 
 // Color map for card borders and text based on status/assignment
 const STATUS_FALLBACK_COLORS = {
-    'Pending': '#FFC107', // Orange for Pending unassigned incidents
-    'Accepted': '#28A745', // Green for incidents I am assigned to (used to be Active)
+    'Pending': '#FFC107', 
+    'Accepted': '#28A745', 
     'Critical': '#DC3545', 
     'High': '#FFC107',
     'Medium': '#007BFF', 
@@ -49,9 +49,8 @@ const STATUS_FALLBACK_COLORS = {
 export default function RescuerHomeScreen({ navigation, route }) {
     const rescuerData = route.params?.rescuerData; 
 
-    // Initialize with the data from the database (IsActive is usually a BIT, so check for true)
     const [isRescuerActive, setIsRescuerActive] = useState(rescuerData?.IsActive === true);
-    const [statusChanging, setStatusChanging] = useState(false); // Loading state for status toggle
+    const [statusChanging, setStatusChanging] = useState(false); 
 
     if (!rescuerData) {
         Alert.alert("Error", "No rescuer data found. Returning to login.");
@@ -69,15 +68,11 @@ export default function RescuerHomeScreen({ navigation, route }) {
 
     const [allIncidents, setAllIncidents] = useState([]); 
     const [loading, setLoading] = useState(false);
-    
-    // Only the Service Type filter state remains
     const [selectedTypes, setSelectedTypes] = useState([]); 
     
-    // Function to apply filtering logic (Only Incident Type remains)
     const applyFilters = useCallback((incidentsToFilter) => {
         let filteredList = incidentsToFilter;
 
-        // Filter by Incident Type only
         if (selectedTypes.length > 0) {
             filteredList = filteredList.filter(incident => 
                 selectedTypes.includes(incident.Type)
@@ -96,8 +91,6 @@ export default function RescuerHomeScreen({ navigation, route }) {
             const response = await axios.get(`${SERVER_URL}/incidents`);
             if (response.data.success) {
                 
-                // Filter out 'Resolved' or 'Done' incidents to only show active dispatches
-                // Note: Filter updated to check for 'Resolved' status
                 const activeIncidents = response.data.incidents.filter(
                     (i) => i.Status !== "Resolved" 
                 );
@@ -123,7 +116,27 @@ export default function RescuerHomeScreen({ navigation, route }) {
         return unsubscribe;
     }, [navigation, fetchIncidents]);
 
-    // --- HANDLER FOR TYPE SELECTION ---
+    // --- HANDLER FOR PHONE CALL ---
+    const handleCall = async (contactNumber) => {
+        if (!contactNumber) {
+            Alert.alert("Error", "Contact number is not available for this incident.");
+            return;
+        }
+
+        const url = `tel:${contactNumber}`;
+        
+        // Check if the device can open the phone dialer
+        const supported = await Linking.canOpenURL(url);
+
+        if (supported) {
+            await Linking.openURL(url);
+        } else {
+            Alert.alert("Error", `Cannot open the dialer. Please manually call: ${contactNumber}`);
+        }
+    };
+    // --- END HANDLER FOR PHONE CALL ---
+
+    // --- OTHER HANDLERS (omitted for brevity) ---
     const handleTypeSelect = (type) => {
         setSelectedTypes(prevSelectedTypes => {
             if (prevSelectedTypes.includes(type)) {
@@ -142,7 +155,6 @@ export default function RescuerHomeScreen({ navigation, route }) {
         navigation.navigate("IncidentMapScreen", { incident });
     };
 
-    // --- FUNCTION TO UPDATE INCIDENT STATUS ---
     const updateStatus = async (incidentId, newStatus) => {
         if (isNaN(numericRescuerId) || numericRescuerId === 0) {
             Alert.alert("Error", "Cannot update status: Rescuer ID is missing or invalid.");
@@ -152,12 +164,14 @@ export default function RescuerHomeScreen({ navigation, route }) {
         try {
             const response = await axios.put(`${SERVER_URL}/incidents/${incidentId}/status`, {
                 status: newStatus,
-                rescuerId: numericRescuerId // Always send the rescuer ID when updating status
+                rescuerId: numericRescuerId 
             });
 
             if (response.data.success) {
-                Alert.alert("Success", `Incident status changed to ${newStatus}`);
-                fetchIncidents(); // Refresh the list
+                if (newStatus !== 'Resolved') { 
+                    Alert.alert("Success", `Incident status changed to ${newStatus}`);
+                }
+                fetchIncidents(); 
             } else {
                 Alert.alert("Error", "Failed to update incident status.");
             }
@@ -167,10 +181,9 @@ export default function RescuerHomeScreen({ navigation, route }) {
         }
     };
     
-    // --- FUNCTION TO TOGGLE RESCUER ACTIVE STATUS ---
     const toggleRescuerStatus = async () => {
         setStatusChanging(true);
-        const newStatus = !isRescuerActive; // Toggle the current state
+        const newStatus = !isRescuerActive; 
         
         try {
             const response = await axios.put(`${SERVER_URL}/rescuers/${numericRescuerId}/status`, {
@@ -178,9 +191,7 @@ export default function RescuerHomeScreen({ navigation, route }) {
             });
 
             if (response.data.success) {
-                setIsRescuerActive(newStatus); // Update local state on success
-                // Also trigger a refresh of incidents if the status change might affect filtering/display
-                // fetchIncidents(); 
+                setIsRescuerActive(newStatus); 
                 Alert.alert("Status Updated", `You are now ${newStatus ? 'Active' : 'Offline'}.`);
             } else {
                 Alert.alert("Error", response.data.message || "Failed to update status.");
@@ -192,23 +203,21 @@ export default function RescuerHomeScreen({ navigation, route }) {
             setStatusChanging(false);
         }
     };
+    // --- END OTHER HANDLERS ---
 
-    // --- RENDER INCIDENT CARD ---
+
+    // --- RENDER INCIDENT CARD (UPDATED) ---
     const renderIncidentCard = ({ item }) => {
         const assignedRescuerId = item.RescuerId;
         const isAssignedToMe = assignedRescuerId === numericRescuerId;
         const isPending = item.Status === 'Pending';
-        // Check if the incident is currently Accepted (or was 'Active' before the change)
-        const isAccepted = item.Status === 'Accepted' || item.Status === 'Active'; 
+        const isAcceptedByMe = isAssignedToMe && item.Status === 'Accepted'; 
 
-        // Set border color based on Priority or Status Fallback
         let borderStyle = styles.cardPending; 
 
         if (item.Priority && STATUS_FALLBACK_COLORS[item.Priority]) {
-            // If Priority exists, use its color
             borderStyle = { borderLeftColor: STATUS_FALLBACK_COLORS[item.Priority] };
         } else if (isAssignedToMe) {
-            // Fallback to green if assigned to me
             borderStyle = styles.cardAssigned; 
         }
 
@@ -225,40 +234,55 @@ export default function RescuerHomeScreen({ navigation, route }) {
                 <Text style={styles.timestamp}>
                     Reported: {formatTimestamp(item.CreatedAt)}
                 </Text>
+                {/* Display Sender Contact if available */}
+                {item.SenderContact && (
+                    <Text>📞 Sender: **{item.SenderContact}**</Text>
+                )}
                 <Text style={[styles.statusText, {color: isAssignedToMe ? STATUS_FALLBACK_COLORS.Accepted : '#8B0000'}]}>
                     Status: **{item.Status}** {assignedRescuerId ? ` (Assigned ID: ${assignedRescuerId})` : ''}
                 </Text>
                 
-                {/* 1. View on Map Button (Now full width, always visible) */}
-                <TouchableOpacity
-                    style={[styles.button, styles.buttonMapFull]} 
-                    onPress={() => handleViewOnMap(item)}
-                >
-                    <Text style={styles.buttonText}>🗺️ View on Map</Text>
-                </TouchableOpacity>
+                {/* Map and Call Buttons in a separate row */}
+                <View style={styles.topActions}> 
+                    {/* View on Map Button */}
+                    <TouchableOpacity
+                        style={[styles.button, styles.buttonMap]} 
+                        onPress={() => handleViewOnMap(item)}
+                    >
+                        <Text style={styles.buttonText}>🗺️ View on Map</Text>
+                    </TouchableOpacity>
 
-                {/* New Action Row for Accept/Done buttons */}
+                    {/* CALL SENDER BUTTON (New) */}
+                    {item.SenderContact && (
+                        <TouchableOpacity
+                            style={[styles.button, styles.buttonCall]} 
+                            onPress={() => handleCall(item.SenderContact)}
+                        >
+                            <Text style={styles.buttonText}>📞 Call Sender</Text>
+                        </TouchableOpacity>
+                    )}
+                </View>
+
+                {/* Accept/Done buttons Row */}
                 <View style={styles.actions}>
                     
-                    {/* 2. Accept Button (Visible if Pending and not assigned to anyone) */}
+                    {/* 2. Accept Button (Visible if Pending and NOT assigned) */}
                     {isPending && !assignedRescuerId && (
                         <TouchableOpacity
                             style={[styles.button, styles.buttonAction, styles.buttonAccept]} 
-                            // ******* MODIFICATION HERE: Status changes 'Pending' to 'Accepted' *******
                             onPress={() => updateStatus(item.Id, 'Accepted')} 
                         >
                             <Text style={styles.buttonText}>Accept Dispatch</Text>
                         </TouchableOpacity>
                     )}
                     
-                    {/* 3. Complete/Resolved Button (Visible if Accepted AND assigned to the current rescuer) */}
-                    {isAccepted && isAssignedToMe && (
+                    {/* 3. Mark Resolved Button (Visible if Accepted AND assigned to me) */}
+                    {isAcceptedByMe && (
                         <TouchableOpacity
                             style={[styles.button, styles.buttonAction, styles.buttonResolved]} 
                             onPress={() => 
                                 Alert.alert("Confirm Resolution", "Mark this incident as Resolved?", [
                                     { text: "Cancel", style: "cancel" },
-                                    // ******* MODIFICATION HERE: Status changes to 'Resolved' *******
                                     { text: "Yes", onPress: () => updateStatus(item.Id, 'Resolved') }, 
                                 ])
                             }
@@ -275,6 +299,7 @@ export default function RescuerHomeScreen({ navigation, route }) {
             </View>
         );
     };
+    // --- END RENDER INCIDENT CARD (UPDATED) ---
 
     return (
         <View style={styles.container}>
@@ -298,7 +323,7 @@ export default function RescuerHomeScreen({ navigation, route }) {
 
             <ScrollView contentContainerStyle={styles.filtersWrapper}>
                 
-                {/* --- INCIDENT TYPE FILTER UI SECTION (The only filter remaining) --- */}
+                {/* --- INCIDENT TYPE FILTER UI SECTION --- */}
                 <View style={styles.filterContainer}>
                     <Text style={styles.filterLabel}>Filter by Type:</Text>
                     <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.scrollContainer}>
@@ -371,7 +396,7 @@ const styles = StyleSheet.create({
         color: "#8B0000",
         textAlign: "center",
     },
-    // --- NEW STATUS TOGGLE STYLES ---
+    // --- STATUS TOGGLE STYLES ---
     statusToggle: {
         padding: 10,
         borderRadius: 8,
@@ -380,11 +405,11 @@ const styles = StyleSheet.create({
         borderWidth: 1,
     },
     statusActive: {
-        backgroundColor: '#28A745', // Green
+        backgroundColor: '#28A745', 
         borderColor: '#1E7E34',
     },
     statusOffline: {
-        backgroundColor: '#DC3545', // Red
+        backgroundColor: '#DC3545', 
         borderColor: '#C82333',
     },
     statusToggleText: {
@@ -392,7 +417,7 @@ const styles = StyleSheet.create({
         fontWeight: 'bold',
         fontSize: 16,
     },
-    // --- END NEW STATUS TOGGLE STYLES ---
+    // --- END STATUS TOGGLE STYLES ---
 
     filtersWrapper: {
         paddingBottom: 5,
@@ -412,11 +437,10 @@ const styles = StyleSheet.create({
         borderColor: "#ddd",
     },
     cardPending: { 
-        borderLeftColor: STATUS_FALLBACK_COLORS['Pending'], // Orange
+        borderLeftColor: STATUS_FALLBACK_COLORS['Pending'], 
     },
-    // Updated to use the Accepted color/logic
     cardAssigned: { 
-        borderLeftColor: STATUS_FALLBACK_COLORS['Accepted'], // Green
+        borderLeftColor: STATUS_FALLBACK_COLORS['Accepted'], 
         backgroundColor: "#e8f5e9",
     },
     title: { fontSize: 18, fontWeight: "bold", marginBottom: 5 },
@@ -425,9 +449,15 @@ const styles = StyleSheet.create({
     assignedNote: { fontSize: 12, color: '#dc3545', marginTop: 5, fontStyle: 'italic' },
     
     // BUTTON STYLES
+    topActions: {
+        flexDirection: "row",
+        justifyContent: "space-between", 
+        marginTop: 10,
+        gap: 10,
+    },
     actions: {
         flexDirection: "row",
-        justifyContent: "flex-end", // Align Accept/Done buttons to the right
+        justifyContent: "flex-end", 
         marginTop: 10,
         gap: 10, 
     },
@@ -436,21 +466,22 @@ const styles = StyleSheet.create({
         borderRadius: 8,
         minHeight: 40,
     },
-    // Style for the View on Map button (now full width)
-    buttonMapFull: { 
+    buttonMap: { 
         backgroundColor: "#007bff",
-        marginTop: 10, // Added margin top to separate it from the status text
-        width: '100%',
+        flex: 1, // Takes up half the row
     },
-    // Style for the Accept/Done buttons (they are in the actions row and use flex: 1)
+    buttonCall: { 
+        backgroundColor: "#FFA500", // Orange for Call
+        flex: 1, // Takes up half the row
+    },
     buttonAction: {
         flex: 1,
     },
     buttonAccept: { 
-        backgroundColor: "#28aa45", // Green for Accept
+        backgroundColor: "#28aa45", 
     },
     buttonResolved: { 
-        backgroundColor: "#A83232", // Maroon/Red for Resolved
+        backgroundColor: "#A83232", 
     },
     buttonText: { color: "#fff", textAlign: "center", fontWeight: "bold", fontSize: 13 },
 

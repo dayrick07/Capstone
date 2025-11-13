@@ -19,7 +19,6 @@
         "NSMicrophoneUsageDescription": "This app needs microphone access to record audio with video",
         "NSPhotoLibraryAddUsageDescription": "This app needs access to save videos to your photo library",
         "NSPhotoLibraryUsageDescription": "This app needs access to load videos from your photo library"
-        
       }
     },
     "android": {
@@ -29,14 +28,14 @@
       },
       "edgeToEdgeEnabled": true,
       "package": "com.alfonsose7.Safekafe",
+      "usesCleartextTraffic": true,
       "permissions": [
-  "CAMERA",
-  "RECORD_AUDIO",
-  "WRITE_EXTERNAL_STORAGE",
-  "READ_EXTERNAL_STORAGE",
-  "BODY_SENSORS"
-]
-
+        "CAMERA",
+        "RECORD_AUDIO",
+        "WRITE_EXTERNAL_STORAGE",
+        "READ_EXTERNAL_STORAGE",
+        "BODY_SENSORS"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -53,7 +52,7 @@
         "expo-build-properties",
         {
           "android": {
-            "kotlinVersion": "2.1.20", 
+            "kotlinVersion": "2.1.20",
             "compileSdkVersion": 35,
             "targetSdkVersion": 35,
             "minSdkVersion": 24,
@@ -73,7 +72,6 @@
               "allprojects.configurations.all { exclude group: 'com.android.support', module: 'support-compat' }",
               "allprojects.configurations.all { exclude group: 'com.android.support', module: 'versionedparcelable' }"
             ]
-
           }
         }
       ]

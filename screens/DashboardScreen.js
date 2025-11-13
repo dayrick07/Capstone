@@ -238,12 +238,10 @@ export default function DashboardScreen({ navigation, route }) {
             <Text style={[styles.label, themeStyles.text]}>Fire Station</Text>
           </TouchableOpacity>
 
-          {/* Row 2: Features - MODIFIED: Track Child replaced with Parent Screen */}
           <TouchableOpacity
             style={[styles.card, themeStyles.card]}
             onPress={() => navigation.navigate("ParentScreen", { userData: loggedInUser })}
           >
-            {/* Using a person-circle icon for Parent Panel */}
             <Ionicons name="person-circle-outline" size={50} color={primaryColor} />
             <Text style={[styles.label, themeStyles.text]}>Parent Screen</Text>
           </TouchableOpacity>

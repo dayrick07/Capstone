@@ -691,11 +691,25 @@ app.post('/incidents', async (req, res) => {
 });
 
 
-// ---------------- 📄 FETCH INCIDENTS ----------------
+// ---------------- 📄 FETCH INCIDENTS (Updated to include SenderContact) ----------------
 app.get('/incidents', async (req, res) => {
   try {
     const pool = await getPool();
-    const result = await pool.request().query('SELECT * FROM Incidents ORDER BY CreatedAt DESC');
+    
+    // SQL Query: JOIN Incidents (I) with Users (U) to retrieve the sender's mobile number.
+    const incidentQuery = `
+        SELECT TOP (1000)
+            I.*,
+            U.mobile AS SenderContact 
+        FROM 
+            Incidents I
+        INNER JOIN 
+            Users U ON I.UserId = U.Id -- Assuming Incidents.UserId links to Users.Id
+        ORDER BY 
+            I.CreatedAt DESC
+    `;
+    
+    const result = await pool.request().query(incidentQuery);
     res.send({ success: true, incidents: result.recordset });
   } catch (err) {
     console.error('❌ Fetch Incidents Error:', err);
@@ -900,4 +914,4 @@ app.get('/', (req, res) => {
 });
 
 // ---------------- ⚙️ START SERVER ----------------
-app.listen(3000, () => console.log('🚀 Server running on port 3000'));
+app.listen(3000, '0.0.0.0', () => console.log("🚀 Server running on port 3000"));
