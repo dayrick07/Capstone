@@ -3,19 +3,17 @@
 import React, { useState, useEffect, useCallback } from "react";
 import {
     View,
-    Text,
+    Text, 
     FlatList,
     TouchableOpacity,
     StyleSheet,
-    Alert,
+    Alert, // <-- Used for confirmation dialogs
     ActivityIndicator,
     ScrollView,
-    Linking, // 👈 NEW IMPORT for phone calls
+    Linking,
 } from "react-native";
 import axios from "axios";
-
-// NOTE: You must replace this with your actual SERVER_URL config/import
-const SERVER_URL = "http://192.168.0.111:3000";
+import { SERVER_URL } from "../config";
 
 // Utility function to format the timestamp
 const formatTimestamp = (timestamp) => {
@@ -29,7 +27,7 @@ const formatTimestamp = (timestamp) => {
 };
 
 // --- CONSTANTS FOR FILTERS & COLORS ---
-const INCIDENT_TYPES = [ 
+const INCIDENT_TYPES = [
     "Police",
     "Fire Station",
     "Ambulance",
@@ -37,20 +35,28 @@ const INCIDENT_TYPES = [
 
 // Color map for card borders and text based on status/assignment
 const STATUS_FALLBACK_COLORS = {
-    'Pending': '#FFC107', 
-    'Accepted': '#28A745', 
-    'Critical': '#DC3545', 
+    'Pending': '#FFC107',
+    'Accepted': '#28A745',
+    'Resolved': '#343A40', // Color for resolved incidents
+    'Critical': '#DC3545',
     'High': '#FFC107',
-    'Medium': '#007BFF', 
+    'Medium': '#007BFF',
     'Low': '#6C757D',
 };
-// -----------------------------
+
+// Barangays of San Fernando, Pampanga 
+const BARANGAYS = [
+    "Bulaon", "Calulut", "Del Pilar", "Del Rosario", "Dolores", "Guagua", "Lara",
+    "Magliman", "Malpitic", "Maimpis", "Santo Rosario", "San Isidro", "San Jose",
+    "San Nicolas", "Sindalan", "Sta Lucia", "Sta Teresita", "San Juan", "San Agustin"
+];
 
 export default function RescuerHomeScreen({ navigation, route }) {
-    const rescuerData = route.params?.rescuerData; 
+    const rescuerData = route.params?.rescuerData;
 
     const [isRescuerActive, setIsRescuerActive] = useState(rescuerData?.IsActive === true);
-    const [statusChanging, setStatusChanging] = useState(false); 
+    const [statusChanging, setStatusChanging] = useState(false);
+    const [sortOrder, setSortOrder] = useState('descending'); // 'descending' (Newest) or 'ascending' (Oldest)
 
     if (!rescuerData) {
         Alert.alert("Error", "No rescuer data found. Returning to login.");
@@ -66,21 +72,37 @@ export default function RescuerHomeScreen({ navigation, route }) {
         return <View style={styles.loadingContainer}><Text>Error loading user ID.</Text></View>;
     }
 
-    const [allIncidents, setAllIncidents] = useState([]); 
+    const [allIncidents, setAllIncidents] = useState([]);
     const [loading, setLoading] = useState(false);
-    const [selectedTypes, setSelectedTypes] = useState([]); 
-    
-    const applyFilters = useCallback((incidentsToFilter) => {
+    const [selectedTypes, setSelectedTypes] = useState([]);
+
+    const toggleSortOrder = () => {
+        setSortOrder(prev => prev === 'descending' ? 'ascending' : 'descending');
+    };
+
+    const applyFilters = (incidentsToFilter) => {
         let filteredList = incidentsToFilter;
 
+        // 1. Filter by Type
         if (selectedTypes.length > 0) {
-            filteredList = filteredList.filter(incident => 
+            filteredList = filteredList.filter(incident =>
                 selectedTypes.includes(incident.Type)
             );
         }
         
-        return filteredList;
-    }, [selectedTypes]); 
+        // 2. Apply sorting logic 
+        return filteredList.sort((a, b) => {
+            const dateA = new Date(a.CreatedAt);
+            const dateB = new Date(b.CreatedAt);
+
+            if (sortOrder === 'descending') {
+                return dateB - dateA; // Newest first
+            } else {
+                return dateA - dateB; // Oldest first
+            }
+        });
+
+    }; 
 
     const incidents = applyFilters(allIncidents);
 
@@ -91,15 +113,8 @@ export default function RescuerHomeScreen({ navigation, route }) {
             const response = await axios.get(`${SERVER_URL}/incidents`);
             if (response.data.success) {
                 
-                const activeIncidents = response.data.incidents.filter(
-                    (i) => i.Status !== "Resolved" 
-                );
-
-                const sortedIncidents = activeIncidents.sort(
-                    (a, b) => new Date(b.CreatedAt) - new Date(a.CreatedAt)
-                );
-
-                setAllIncidents(sortedIncidents); 
+                // CRITICAL CHANGE: Set ALL incidents, including Resolved ones
+                setAllIncidents(response.data.incidents);
             }
         } catch (err) {
             console.error("❌ Fetch Incidents Error:", err.message);
@@ -124,8 +139,7 @@ export default function RescuerHomeScreen({ navigation, route }) {
         }
 
         const url = `tel:${contactNumber}`;
-        
-        // Check if the device can open the phone dialer
+
         const supported = await Linking.canOpenURL(url);
 
         if (supported) {
@@ -134,9 +148,7 @@ export default function RescuerHomeScreen({ navigation, route }) {
             Alert.alert("Error", `Cannot open the dialer. Please manually call: ${contactNumber}`);
         }
     };
-    // --- END HANDLER FOR PHONE CALL ---
 
-    // --- OTHER HANDLERS (omitted for brevity) ---
     const handleTypeSelect = (type) => {
         setSelectedTypes(prevSelectedTypes => {
             if (prevSelectedTypes.includes(type)) {
@@ -160,18 +172,18 @@ export default function RescuerHomeScreen({ navigation, route }) {
             Alert.alert("Error", "Cannot update status: Rescuer ID is missing or invalid.");
             return;
         }
-        
+
         try {
             const response = await axios.put(`${SERVER_URL}/incidents/${incidentId}/status`, {
                 status: newStatus,
-                rescuerId: numericRescuerId 
+                rescuerId: numericRescuerId
             });
 
             if (response.data.success) {
-                if (newStatus !== 'Resolved') { 
+                if (newStatus !== 'Resolved') {
                     Alert.alert("Success", `Incident status changed to ${newStatus}`);
                 }
-                fetchIncidents(); 
+                fetchIncidents();
             } else {
                 Alert.alert("Error", "Failed to update incident status.");
             }
@@ -180,18 +192,18 @@ export default function RescuerHomeScreen({ navigation, route }) {
             Alert.alert("Error", "Failed to update incident status. Check server console for errors.");
         }
     };
-    
+
     const toggleRescuerStatus = async () => {
         setStatusChanging(true);
-        const newStatus = !isRescuerActive; 
-        
+        const newStatus = !isRescuerActive;
+
         try {
             const response = await axios.put(`${SERVER_URL}/rescuers/${numericRescuerId}/status`, {
                 isActive: newStatus,
             });
 
             if (response.data.success) {
-                setIsRescuerActive(newStatus); 
+                setIsRescuerActive(newStatus);
                 Alert.alert("Status Updated", `You are now ${newStatus ? 'Active' : 'Offline'}.`);
             } else {
                 Alert.alert("Error", response.data.message || "Failed to update status.");
@@ -203,22 +215,22 @@ export default function RescuerHomeScreen({ navigation, route }) {
             setStatusChanging(false);
         }
     };
-    // --- END OTHER HANDLERS ---
 
-
-    // --- RENDER INCIDENT CARD (UPDATED) ---
     const renderIncidentCard = ({ item }) => {
         const assignedRescuerId = item.RescuerId;
         const isAssignedToMe = assignedRescuerId === numericRescuerId;
         const isPending = item.Status === 'Pending';
-        const isAcceptedByMe = isAssignedToMe && item.Status === 'Accepted'; 
+        const isResolved = item.Status === 'Resolved';
+        const isAcceptedByMe = isAssignedToMe && item.Status === 'Accepted';
 
-        let borderStyle = styles.cardPending; 
+        let borderStyle = styles.cardPending;
 
-        if (item.Priority && STATUS_FALLBACK_COLORS[item.Priority]) {
+        if (isResolved) {
+            borderStyle = styles.cardResolved;
+        } else if (item.Priority && STATUS_FALLBACK_COLORS[item.Priority]) {
             borderStyle = { borderLeftColor: STATUS_FALLBACK_COLORS[item.Priority] };
         } else if (isAssignedToMe) {
-            borderStyle = styles.cardAssigned; 
+            borderStyle = styles.cardAssigned;
         }
 
         const cardStyle = [
@@ -231,31 +243,28 @@ export default function RescuerHomeScreen({ navigation, route }) {
                 <Text style={styles.title}>{item.Type}</Text>
                 <Text>⭐ Priority: **{item.Priority || 'N/A'}**</Text> 
                 <Text>📍 {item.Location}</Text>
+                
                 <Text style={styles.timestamp}>
                     Reported: {formatTimestamp(item.CreatedAt)}
                 </Text>
-                {/* Display Sender Contact if available */}
                 {item.SenderContact && (
                     <Text>📞 Sender: **{item.SenderContact}**</Text>
                 )}
-                <Text style={[styles.statusText, {color: isAssignedToMe ? STATUS_FALLBACK_COLORS.Accepted : '#8B0000'}]}>
+                <Text style={[styles.statusText, {color: isResolved ? STATUS_FALLBACK_COLORS.Resolved : (isAssignedToMe ? STATUS_FALLBACK_COLORS.Accepted : '#8B0000')}]}>
                     Status: **{item.Status}** {assignedRescuerId ? ` (Assigned ID: ${assignedRescuerId})` : ''}
                 </Text>
-                
-                {/* Map and Call Buttons in a separate row */}
-                <View style={styles.topActions}> 
-                    {/* View on Map Button */}
+
+                <View style={styles.topActions}>
                     <TouchableOpacity
-                        style={[styles.button, styles.buttonMap]} 
+                        style={[styles.button, styles.buttonMap]}
                         onPress={() => handleViewOnMap(item)}
                     >
                         <Text style={styles.buttonText}>🗺️ View on Map</Text>
                     </TouchableOpacity>
 
-                    {/* CALL SENDER BUTTON (New) */}
                     {item.SenderContact && (
                         <TouchableOpacity
-                            style={[styles.button, styles.buttonCall]} 
+                            style={[styles.button, styles.buttonCall]}
                             onPress={() => handleCall(item.SenderContact)}
                         >
                             <Text style={styles.buttonText}>📞 Call Sender</Text>
@@ -263,51 +272,54 @@ export default function RescuerHomeScreen({ navigation, route }) {
                     )}
                 </View>
 
-                {/* Accept/Done buttons Row */}
-                <View style={styles.actions}>
-                    
-                    {/* 2. Accept Button (Visible if Pending and NOT assigned) */}
-                    {isPending && !assignedRescuerId && (
-                        <TouchableOpacity
-                            style={[styles.button, styles.buttonAction, styles.buttonAccept]} 
-                            onPress={() => updateStatus(item.Id, 'Accepted')} 
-                        >
-                            <Text style={styles.buttonText}>Accept Dispatch</Text>
-                        </TouchableOpacity>
-                    )}
-                    
-                    {/* 3. Mark Resolved Button (Visible if Accepted AND assigned to me) */}
-                    {isAcceptedByMe && (
-                        <TouchableOpacity
-                            style={[styles.button, styles.buttonAction, styles.buttonResolved]} 
-                            onPress={() => 
-                                Alert.alert("Confirm Resolution", "Mark this incident as Resolved?", [
-                                    { text: "Cancel", style: "cancel" },
-                                    { text: "Yes", onPress: () => updateStatus(item.Id, 'Resolved') }, 
-                                ])
-                            }
-                        >
-                            <Text style={styles.buttonText}>Mark Resolved</Text>
-                        </TouchableOpacity>
-                    )}
-                </View>
-                
-                {/* Helper text for assignment */}
+                {/* Hide action buttons for resolved incidents */}
+                {!isResolved && (
+                    <View style={styles.actions}>
+                        {isPending && !assignedRescuerId && (
+                            <TouchableOpacity
+                                style={[styles.button, styles.buttonAction, styles.buttonAccept]}
+                                onPress={() =>
+                                    // CONFIRMATION FOR ACCEPT
+                                    Alert.alert("Confirm Acceptance", "Do you want to accept this dispatch?", [
+                                        { text: "Cancel", style: "cancel" },
+                                        { text: "Accept", onPress: () => updateStatus(item.Id, 'Accepted') },
+                                    ])
+                                }
+                            >
+                                <Text style={styles.buttonText}>Accept Dispatch</Text>
+                            </TouchableOpacity>
+                        )}
+
+                        {isAcceptedByMe && (
+                            <TouchableOpacity
+                                style={[styles.button, styles.buttonAction, styles.buttonResolved]}
+                                onPress={() =>
+                                    // CONFIRMATION FOR RESOLVED
+                                    Alert.alert("Confirm Resolution", "Mark this incident as Resolved? This action cannot be undone.", [
+                                        { text: "Cancel", style: "cancel" },
+                                        { text: "Mark Resolved", onPress: () => updateStatus(item.Id, 'Resolved') },
+                                    ])
+                                }
+                            >
+                                <Text style={styles.buttonText}>Mark Resolved</Text>
+                            </TouchableOpacity>
+                        )}
+                    </View>
+                )}
+
                 {isPending && assignedRescuerId && assignedRescuerId !== numericRescuerId && (
                     <Text style={styles.assignedNote}>⚠️ Already assigned to another rescuer.</Text>
                 )}
             </View>
         );
     };
-    // --- END RENDER INCIDENT CARD (UPDATED) ---
 
     return (
         <View style={styles.container}>
-            <Text style={styles.header}>🚨 Active Incidents</Text>
+            <Text style={styles.header}>🚨 All Incidents (Active & Resolved)</Text>
 
-            {/* --- ACTIVE/OFFLINE TOGGLE BUTTON --- */}
-            <TouchableOpacity 
-                style={[styles.statusToggle, isRescuerActive ? styles.statusActive : styles.statusOffline]} 
+            <TouchableOpacity
+                style={[styles.statusToggle, isRescuerActive ? styles.statusActive : styles.statusOffline]}
                 onPress={toggleRescuerStatus}
                 disabled={statusChanging}
             >
@@ -319,11 +331,21 @@ export default function RescuerHomeScreen({ navigation, route }) {
                     </Text>
                 )}
             </TouchableOpacity>
-            {/* --------------------------------------- */}
+
+            {/* --- SORT TOGGLE BUTTON --- */}
+            <TouchableOpacity
+                style={styles.sortToggle}
+                onPress={toggleSortOrder}
+            >
+                <Text style={styles.sortToggleText}>
+                    Sort Order: **{sortOrder === 'descending' ? '⬇️ Newest First' : '⬆️ Oldest First'}**
+                </Text>
+            </TouchableOpacity>
+            {/* --------------------------- */}
+
 
             <ScrollView contentContainerStyle={styles.filtersWrapper}>
-                
-                {/* --- INCIDENT TYPE FILTER UI SECTION --- */}
+
                 <View style={styles.filterContainer}>
                     <Text style={styles.filterLabel}>Filter by Type:</Text>
                     <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.scrollContainer}>
@@ -346,7 +368,7 @@ export default function RescuerHomeScreen({ navigation, route }) {
                         ))}
                     </ScrollView>
                 </View>
-                {/* ----------------------------- */}
+                
             </ScrollView>
 
             <FlatList
@@ -356,23 +378,10 @@ export default function RescuerHomeScreen({ navigation, route }) {
                 onRefresh={fetchIncidents}
                 renderItem={renderIncidentCard}
                 ListEmptyComponent={() => (
-                    !loading && <Text style={styles.noIncidents}>No active incidents matching your filters.</Text>
+                    !loading && <Text style={styles.noIncidents}>No incidents matching your filters.</Text>
                 )}
             />
 
-            {/* Footer Buttons */}
-            <TouchableOpacity
-                style={styles.historyButton}
-                onPress={() =>
-                    navigation.navigate("RescuerHistoryScreen", {
-                        rescuerId: numericRescuerId, 
-                        rescuerName: rescuerData.Name
-                    })
-                }
-            >
-                <Text style={styles.historyText}>📚 My Past Dispatches</Text>
-            </TouchableOpacity>
-            
             <TouchableOpacity
                 style={styles.profileButton}
                 onPress={() =>
@@ -388,164 +397,187 @@ export default function RescuerHomeScreen({ navigation, route }) {
 }
 
 const styles = StyleSheet.create({
-    container: { flex: 1, padding: 15, backgroundColor: "#fff" },
-    header: {
-        fontSize: 22,
-        fontWeight: "bold",
-        marginBottom: 10,
-        color: "#8B0000",
-        textAlign: "center",
+    container: {
+        flex: 1,
+        backgroundColor: '#f8f8f8',
+        paddingTop: 10,
     },
-    // --- STATUS TOGGLE STYLES ---
+    header: {
+        fontSize: 24,
+        fontWeight: 'bold',
+        textAlign: 'center',
+        marginVertical: 10,
+        color: '#333',
+    },
     statusToggle: {
         padding: 10,
-        borderRadius: 8,
-        marginBottom: 15,
+        marginHorizontal: 15,
+        borderRadius: 5,
         alignItems: 'center',
-        borderWidth: 1,
+        marginBottom: 8,
     },
     statusActive: {
-        backgroundColor: '#28A745', 
-        borderColor: '#1E7E34',
+        backgroundColor: '#28A745',
     },
     statusOffline: {
-        backgroundColor: '#DC3545', 
-        borderColor: '#C82333',
+        backgroundColor: '#DC3545',
     },
     statusToggleText: {
         color: '#fff',
         fontWeight: 'bold',
-        fontSize: 16,
     },
-    // --- END STATUS TOGGLE STYLES ---
-
+    sortToggle: { 
+        padding: 8,
+        marginHorizontal: 15,
+        borderRadius: 5,
+        alignItems: 'center',
+        marginBottom: 10,
+        backgroundColor: '#007BFF', 
+    },
+    sortToggleText: { 
+        color: '#fff',
+        fontWeight: 'bold',
+    },
     filtersWrapper: {
-        paddingBottom: 5,
-        borderBottomWidth: 1,
-        borderBottomColor: '#eee',
-        marginBottom: 10,
+        paddingHorizontal: 15,
+        paddingBottom: 10,
     },
-    loadingContainer: { flex: 1, justifyContent: "center", alignItems: "center" },
-    
-    // Card styles 
-    card: {
-        backgroundColor: "#f9f9f9",
-        padding: 15,
-        borderRadius: 10,
-        marginBottom: 10,
-        borderLeftWidth: 5,
-        borderColor: "#ddd",
-    },
-    cardPending: { 
-        borderLeftColor: STATUS_FALLBACK_COLORS['Pending'], 
-    },
-    cardAssigned: { 
-        borderLeftColor: STATUS_FALLBACK_COLORS['Accepted'], 
-        backgroundColor: "#e8f5e9",
-    },
-    title: { fontSize: 18, fontWeight: "bold", marginBottom: 5 },
-    timestamp: { fontSize: 12, color: "#666", marginBottom: 5 },
-    statusText: { fontSize: 14, fontWeight: '600', color: '#8B0000', marginTop: 5 },
-    assignedNote: { fontSize: 12, color: '#dc3545', marginTop: 5, fontStyle: 'italic' },
-    
-    // BUTTON STYLES
-    topActions: {
-        flexDirection: "row",
-        justifyContent: "space-between", 
-        marginTop: 10,
-        gap: 10,
-    },
-    actions: {
-        flexDirection: "row",
-        justifyContent: "flex-end", 
-        marginTop: 10,
-        gap: 10, 
-    },
-    button: {
-        padding: 10,
-        borderRadius: 8,
-        minHeight: 40,
-    },
-    buttonMap: { 
-        backgroundColor: "#007bff",
-        flex: 1, // Takes up half the row
-    },
-    buttonCall: { 
-        backgroundColor: "#FFA500", // Orange for Call
-        flex: 1, // Takes up half the row
-    },
-    buttonAction: {
-        flex: 1,
-    },
-    buttonAccept: { 
-        backgroundColor: "#28aa45", 
-    },
-    buttonResolved: { 
-        backgroundColor: "#A83232", 
-    },
-    buttonText: { color: "#fff", textAlign: "center", fontWeight: "bold", fontSize: 13 },
-
-    // --- FILTER STYLES ---
     filterContainer: {
         marginBottom: 10,
     },
     filterLabel: {
         fontSize: 14,
-        fontWeight: '600',
-        marginBottom: 8,
-        color: '#333',
+        fontWeight: 'bold',
+        marginBottom: 5,
+        color: '#555',
     },
     scrollContainer: {
         flexDirection: 'row',
     },
     filterButton: {
         paddingVertical: 8,
-        paddingHorizontal: 12,
+        paddingHorizontal: 15,
         borderRadius: 20,
-        marginRight: 8,
         borderWidth: 1,
-        borderColor: '#ccc',
+        borderColor: '#007BFF',
+        marginRight: 10,
+        backgroundColor: '#fff',
     },
     filterButtonActive: {
-        backgroundColor: '#007bff', 
-        borderColor: '#007bff',
+        backgroundColor: '#007BFF',
     },
     filterButtonText: {
-        fontSize: 12,
-        fontWeight: '500',
-        color: '#333',
+        color: '#007BFF',
+        fontSize: 14,
     },
     filterButtonTextActive: {
         color: '#fff',
         fontWeight: 'bold',
     },
+    card: {
+        backgroundColor: '#fff',
+        padding: 15,
+        marginVertical: 8,
+        marginHorizontal: 15,
+        borderRadius: 8,
+        borderLeftWidth: 8,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 3,
+        elevation: 3,
+    },
+    cardPending: {
+        borderLeftColor: '#FFC107',
+    },
+    cardAssigned: {
+        borderLeftColor: '#28A745',
+    },
+    cardResolved: {
+        borderLeftColor: '#343A40', // Dark grey for resolved
+    },
+    title: {
+        fontSize: 18,
+        fontWeight: 'bold',
+        marginBottom: 5,
+        color: '#333',
+    },
+    timestamp: {
+        fontSize: 12,
+        color: '#666',
+        marginTop: 5,
+        marginBottom: 8,
+    },
+    statusText: {
+        fontWeight: 'bold',
+        marginTop: 5,
+        fontSize: 14,
+    },
+    topActions: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        marginTop: 10,
+    },
+    actions: {
+        flexDirection: 'row',
+        marginTop: 10,
+    },
+    button: {
+        paddingVertical: 8,
+        paddingHorizontal: 12,
+        borderRadius: 5,
+        alignItems: 'center',
+        marginRight: 10,
+        flex: 1,
+    },
+    buttonMap: {
+        backgroundColor: '#007BFF',
+    },
+    buttonCall: {
+        backgroundColor: '#6C757D',
+    },
+    buttonAction: {
+        flex: 1,
+        marginRight: 10,
+    },
+    buttonAccept: {
+        backgroundColor: '#28A745',
+    },
+    buttonResolved: {
+        backgroundColor: '#DC3545',
+    },
+    buttonText: {
+        color: '#fff',
+        fontWeight: 'bold',
+        fontSize: 14,
+    },
+    assignedNote: {
+        color: '#DC3545',
+        marginTop: 10,
+        fontStyle: 'italic',
+        fontSize: 12,
+    },
     noIncidents: {
         textAlign: 'center',
-        marginTop: 20,
+        marginTop: 50,
         fontSize: 16,
         color: '#666',
     },
-    // --- END FILTER STYLES ---
-
-    // FOOTER BUTTONS
-    historyButton: {
-        backgroundColor: "#007bff", 
-        padding: 15,
-        borderRadius: 10,
-        alignItems: "center",
-        marginTop: 10,
-    },
-    historyText: { 
-        color: "#fff", 
-        fontSize: 16, 
-        fontWeight: "bold" 
-    },
     profileButton: {
-        backgroundColor: "#8B0000",
-        padding: 15,
-        borderRadius: 10,
-        alignItems: "center",
-        marginTop: 10,
+        position: 'absolute',
+        bottom: 10, 
+        right: 15,
+        backgroundColor: '#6C757D',
+        padding: 12,
+        borderRadius: 30,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.25,
+        shadowRadius: 3.84,
+        elevation: 5,
     },
-    profileText: { color: "#fff", fontSize: 16, fontWeight: "bold" },
+    profileText: {
+        color: '#fff',
+        fontWeight: 'bold',
+    },
 });

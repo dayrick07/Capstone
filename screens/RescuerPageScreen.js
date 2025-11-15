@@ -1,8 +1,7 @@
 import React, { useState } from "react";
 import { View, Text, ScrollView, TextInput, TouchableOpacity, Alert, StyleSheet } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
-
-const SERVER_URL = "http://192.168.0.111:3000";
+import { SERVER_URL } from "../config";
 
 export default function RescuerPageScreen({ navigation, route }) {
   const rescuerFromRoute = route.params?.rescuerData;

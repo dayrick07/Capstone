@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { View, Text, ScrollView, TextInput, TouchableOpacity, Alert, StyleSheet } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
-
+import { SERVER_URL } from "../config";
 export default function UserPageScreen({ navigation, route }) {
   const userDataFromRoute = route.params?.userData;
 
@@ -9,7 +9,6 @@ export default function UserPageScreen({ navigation, route }) {
     navigation.replace("LoginScreen");
     return null;
   }
-const SERVER_URL = "http://192.168.0.111:3000"; // replace with your PC's local IP
 
   const [userData, setUserData] = useState(userDataFromRoute);
   const [editMode, setEditMode] = useState(false);

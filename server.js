@@ -17,10 +17,11 @@ const config = {
   server: '192.168.0.111', // change to your local IP if testing on mobile
   database: 'SafeKaFernandino',
   options: {
-    encrypt: false,
+    encrypt: false,
     trustServerCertificate: true,
   }
 };
+
 
 // ---------- Create Connection Pool ----------
 let pool;
@@ -287,26 +288,38 @@ app.post('/otp/verify', async (req, res) => {
 });
 // ---------------- 🔑 USER LOGIN ----------------
 app.post('/users/login', async (req, res) => {
-  const { email, password } = req.body;
-  try {
-    const pool = await getPool();
+  const { email, password } = req.body;
+  try {
+    const pool = await getPool();
 
-    const result = await pool.request()
-      .input('email', sql.VarChar, email)
-      .query('SELECT * FROM Users WHERE Email = @email');
+    const result = await pool.request()
+      .input('email', sql.VarChar, email)
+      .query(`
+        SELECT Id, Name, Email, PasswordHash, mobile
+        FROM Users
+        WHERE Email = @email
+      `);
 
-    const user = result.recordset[0];
-    if (!user) return res.status(400).send({ success: false, message: 'User not found.' });
+    const user = result.recordset[0];
+    if (!user) return res.status(400).send({ success: false, message: 'User not found.' });
 
-    const match = await bcrypt.compare(password, user.PasswordHash);
-    if (!match) return res.status(400).send({ success: false, message: 'Incorrect password.' });
+    const match = await bcrypt.compare(password, user.PasswordHash);
+    if (!match) return res.status(400).send({ success: false, message: 'Incorrect password.' });
 
-    res.send({ success: true, user });
-  } catch (err) {
-    console.error('❌ Login Error:', err);
-    res.status(500).send({ success: false, error: err.message });
-  }
+    res.send({
+      success: true,
+      userId: user.Id,
+      name: user.Name,
+      email: user.Email,
+      mobile: user.mobile   // ✅ this is correct based on DB
+    });
+
+  } catch (err) {
+    console.error('❌ Login Error:', err);
+    res.status(500).send({ success: false, error: err.message });
+  }
 });
+
 // ---------------- 👶 CHILD LOGIN ----------------
 app.post('/children/login', async (req, res) => {
   const { email, password } = req.body;
@@ -663,37 +676,60 @@ app.get('/stations', async (req, res) => {
     res.status(500).send({ success: false, error: err.message });
   }
 });
-// ---------------- 🚨 CREATE INCIDENT ----------------
+// ---------------- 🚨 CREATE INCIDENT WITH BACKGROUND SMS ----------------
 app.post('/incidents', async (req, res) => {
-  const { Type, Location, Latitude, Longitude, Status, UserId, ChildId } = req.body;
+    const { Type, Location, Latitude, Longitude, Status, UserId, ChildId, UserMobile } = req.body;
 
-  // Require at least one of UserId or ChildId
-  if (!UserId && !ChildId) {
-    return res.status(400).send({ success: false, message: "UserId or ChildId is required" });
-  }
+    if (!UserId && !ChildId) {
+        return res.status(400).send({ success: false, message: "UserId or ChildId is required" });
+    }
 
-  try {
-    const pool = await getPool();
+    try {
+        const pool = await getPool();
 
-    await pool.request()
-      .input('Type', sql.VarChar, Type)
-      .input('Location', sql.VarChar, Location)
-      .input('Latitude', sql.Float, Latitude || null)
-      .input('Longitude', sql.Float, Longitude || null)
-      .input('Status', sql.VarChar, Status || 'Pending')
-      .input('UserId', sql.Int, UserId || null)
-      .input('ChildId', sql.Int, ChildId || null)
-      .query(`
-        INSERT INTO Incidents (Type, Location, Latitude, Longitude, Status, UserId, ChildId, CreatedAt)
-        VALUES (@Type, @Location, @Latitude, @Longitude, @Status, @UserId, @ChildId, GETDATE())
-      `);
+        // 1️⃣ Insert the incident into the database
+        await pool.request()
+            .input('Type', sql.VarChar, Type)
+            .input('Location', sql.VarChar, Location)
+            .input('Latitude', sql.Float, Latitude || null)
+            .input('Longitude', sql.Float, Longitude || null)
+            .input('Status', sql.VarChar, Status || 'Pending')
+            .input('UserId', sql.Int, UserId || null)
+            .input('ChildId', sql.Int, ChildId || null)
+            .query(`
+                INSERT INTO Incidents (Type, Location, Latitude, Longitude, Status, UserId, ChildId, CreatedAt)
+                VALUES (@Type, @Location, @Latitude, @Longitude, @Status, @UserId, @ChildId, GETDATE())
+            `);
 
-    res.send({ success: true, message: "Incident reported successfully!" });
-  } catch (err) {
-    console.error('❌ Create Incident Error:', err);
-    res.status(500).send({ success: false, error: err.message });
-  }
+        // 2️⃣ Respond immediately so the client is not blocked
+        res.send({ success: true, message: "Incident reported! Admin is being notified." });
+
+        // 3️⃣ Send SMS in the background (non-blocking)
+        const adminMobile = '+639292760287';
+        const apiToken = 'd53783f0bbfd7010b6d873dcde2a0e34b3a824d7';
+        const message = `🚨 DISTRESS ALERT 🚨
+Type: ${Type}
+Location: ${Location}
+Reported by: ${UserId || ChildId}
+User Phone: ${UserMobile || 'N/A'}`;
+
+        axios.post(
+            'https://sms.iprogtech.com/api/v1/sms_messages',
+            { api_token: apiToken, phone_number: adminMobile, message },
+            { headers: { 'Content-Type': 'application/json' } }
+        ).then(() => {
+            console.log(`[DISTRESS ALERT] Sent alert to ${adminMobile}`);
+        }).catch(err => {
+            console.error('❌ SMS Sending Failed:', err.message);
+        });
+
+    } catch (err) {
+        console.error('❌ Create Incident Error:', err);
+        res.status(500).send({ success: false, error: err.message });
+    }
 });
+
+
 
 
 // ---------------- 📄 FETCH INCIDENTS (Updated to include SenderContact) ----------------
@@ -722,7 +758,7 @@ app.get('/incidents', async (req, res) => {
   }
 });
 
-// ---------------- ⚡ UPDATE INCIDENT STATUS (FIXED) ----------------
+// ---------------- ⚡ UPDATE INCIDENT STATUS ----------------
 app.put('/incidents/:id/status', async (req, res) => {
   const incidentId = parseInt(req.params.id);
   const { status, rescuerId: rawRescuerId } = req.body; 
@@ -757,7 +793,7 @@ app.put('/incidents/:id/status', async (req, res) => {
     res.status(500).json({ success: false, error: err.message });
   }
 });
-// ---------------- 📄 FETCH RESCUER HISTORY (New Feature) ----------------
+// ---------------- 📄 FETCH RESCUER HISTORY (Fixed) ----------------
 app.get('/rescuers/:id/history', async (req, res) => {
   const rescuerId = parseInt(req.params.id);
 
@@ -768,17 +804,27 @@ app.get('/rescuers/:id/history', async (req, res) => {
   try {
     const pool = await getPool();
     const result = await pool.request()
-      .input('rescuerId', sql.Int, rescuerId)
+      .input('rescuerId', sql.Int, rescuerId) 
       .query(`
-        SELECT *         FROM Incidents 
-        WHERE RescuerId = @rescuerId AND Status = 'Done'
-        ORDER BY UpdatedAt DESC
+        SELECT * FROM Incidents 
+        WHERE RescuerId = @rescuerId AND Status = 'Resolved' 
+        -- Status is set to 'Resolved' for completed cases.
+        -- If you have a separate 'Done' status, use Status IN ('Resolved', 'Done')
+        
+        -- FIX: Changed the sorting column from 'UpdatedAt' (which was invalid) 
+        -- to 'CreatedAt', which is available in your schema.
+        ORDER BY CreatedAt DESC 
       `);
 
     res.send({ success: true, incidents: result.recordset });
   } catch (err) {
-    console.error('❌ Fetch Rescuer History Error:', err);
-    res.status(500).send({ success: false, error: err.message });
+    console.error('❌ Fetch Rescuer History Error:', err); 
+    
+    res.status(500).send({ 
+        success: false, 
+        error: 'Internal Server Error during history fetch.', 
+        details: err.message || 'Check server logs for database error.' 
+    });
   }
 });
 // ---------------- 📞 EMERGENCY CONTACTS ----------------
@@ -918,5 +964,5 @@ app.get('/', (req, res) => {
   res.redirect('/admin-login');
 });
 
-// ---------------- ⚙️ START SERVER ----------------
-app.listen(3000, '0.0.0.0', () => console.log("🚀 Server running on port 3000"));
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, '0.0.0.0', () => console.log(`🚀 Server running on port ${PORT}`));

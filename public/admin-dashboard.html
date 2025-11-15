@@ -8,35 +8,31 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
     <style>
-        /* General Body & Background (Light Mode Default) */
         body { 
-            background: #fdfdfe; /* Very light, almost white background */
+            background: #752b00cc;
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            color: #343a40; /* Dark grey for general text */
-            transition: background-color 0.3s, color 0.3s; /* Smooth transition for dark mode toggle */
+            color: #343a40;
+            transition: background-color 0.3s, color 0.3s;
         }
         
-        /* Navbar */
+ 
         .navbar { 
-            background-color: #3f51b5; /* Muted Indigo Blue */
-            box-shadow: 0 3px 8px rgba(0, 0, 0, 0.1); /* Softer shadow */
+            background-color: #b62a008a;
+            box-shadow: 0 3px 8px rgba(0, 0, 0, 0.1);
         }
         .navbar-brand, .nav-link { 
             color: #fff !important; 
             font-weight: 600;
         }
-        /* Buttons in Navbar - Use Bootstrap defaults for subtlety */
         .navbar .btn-light {
-            color: #3f51b5; /* Indigo text for light buttons */
+            color: #3f51b5;
             background-color: #fff;
             border-color: #fff;
         }
-        
-        /* Cards & Containers */
         .card { 
-            border: 1px solid rgba(0, 0, 0, 0.05); /* Very light border */
-            border-radius: 10px; /* Slightly less rounded */
-            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.06); /* Lighter shadow */
+            border: 1px solid rgba(0, 0, 0, 0.05);
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.06);
             transition: transform 0.15s ease-in-out, box-shadow 0.15s ease-in-out, background-color 0.3s, color 0.3s;
         }
         .card:hover {
@@ -44,32 +40,28 @@
             box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
         }
         .card-header {
-            border-top-left-radius: 9px; /* Match card border-radius */
+            border-top-left-radius: 9px;
             border-top-right-radius: 9px;
             font-size: 1.05rem;
             font-weight: 600;
             padding: 0.9rem 1.25rem;
-            color: #fff; /* White text for all headers */
+            color: #fff;
         }
-        /* Subtle header background colors */
         .card-header.bg-primary { background-color: #3f51b5 !important; } /* Indigo */
         .card-header.bg-info { background-color: #03a9f4 !important; } /* Light Blue */
-        .card-header.bg-warning { background-color: #ffc107 !important; color: #343a40 !important;} /* Amber, darker text */
-        .card-header.bg-success { background-color: #4CAF50 !important; } /* Green */
+        .card-header.bg-warning { background-color: #f8f8f8 !important; color: #343a40 !important;} 
+        .card-header.bg-success { background-color: #4caf4fb0 !important; } /* Green */
 
-
-        /* Summary Cards - very subtle colored backgrounds */
         .summary-card { 
             text-align: center; 
             padding: 20px; 
-            background: #ffffff; /* Default white background */
+            background: #ffffff; 
             height: 100%;
             display: flex;
             flex-direction: column;
             justify-content: space-between;
             transition: background-color 0.3s;
         }
-        /* Subtle light background tints for summary cards */
         .summary-card.total { background-color: #e3f2fd; } /* Light Blue */
         .summary-card.active { background-color: #e8f5e9; } /* Light Green */
         .summary-card.pending { background-color: #fffde7; } /* Very Light Yellow */
@@ -92,10 +84,8 @@
         #pendingCases { color: #ffc107; } /* Amber */
         #completedCases { color: #03a9f4; } /* Light Blue */
 
-
-        /* Table */
         table th { 
-            background-color: #4CAF50; /* A pleasant green for table header */
+            background-color: #4CAF50;
             color: white; 
             cursor: pointer; 
             font-weight: 600;
@@ -117,7 +107,7 @@
         /* Filters */
         .filter-container { 
             display: flex; 
-            flex-wrap: wrap; /* Allow wrapping on smaller screens */
+            flex-wrap: wrap;
             align-items: center; 
             gap: 10px;
         }
@@ -130,9 +120,9 @@
         }
         .filter-container label {
             font-weight: 500;
-            color: #f8f9fa; /* Lighter text for labels in dark header */
+            color: #f8f9fa;
             margin-right: 3px;
-            margin-bottom: 0; /* Remove default margin */
+            margin-bottom: 0;
         }
         .search-input { 
             width: 200px !important; 
@@ -141,12 +131,12 @@
 
         /* Rescuer List */
         #rescuerListContainer .border {
-            border: 1px solid #dcdfe3 !important; /* Slightly darker border */
+            border: 1px solid #dcdfe3 !important;
             background-color: #fefefe;
             border-radius: 8px;
             padding: 10px;
-            margin-bottom: 8px; /* Reduce margin a bit */
-            box-shadow: 0 1px 3px rgba(0,0,0,0.05); /* Very slight shadow for individual items */
+            margin-bottom: 8px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
         }
         #rescuerListContainer select {
             border-radius: 5px;
@@ -155,40 +145,32 @@
             font-size: 0.9rem;
         }
 
-        /* Modal specific styling for iframe */
         #mapModal .modal-body {
-            padding: 0; /* Remove padding around map */
+            padding: 0;
         }
         #mapFrame {
-            border-radius: 0 0 9px 9px; /* Match modal border radius */
+            border-radius: 0 0 9px 9px;
         }
-
-        /* --- DARK MODE STYLES START HERE --- */
-
-        /* Base Dark Mode */
         .dark-mode { 
-            background: #121212; /* Very dark background */
-            color: #e0e0e0; /* Light text for readability */
+            background: #121212;
+            color: #e0e0e0;
         }
 
         /* Navbar in Dark Mode */
         .dark-mode .navbar { 
-            background-color: #1f1f1f; /* Slightly lighter dark gray for contrast */
+            background-color: #1f1f1f;
             box-shadow: 0 3px 8px rgba(255, 255, 255, 0.1);
         }
         .dark-mode .navbar-brand, .dark-mode .nav-link { 
             color: #bdbdbd !important; 
         }
         .dark-mode .btn-light {
-            color: #121212; /* Dark text for light buttons in dark mode */
+            color: #121212;
         }
-        /* Style for the Dark Mode button itself when in Light Mode (btn-secondary) is already handled by Bootstrap */
         .dark-mode .btn-info {
-            background-color: #03a9f4; /* Keep info color for contrast */
+            background-color: #03a9f4;
             color: white;
         }
-
-        /* Cards & Containers in Dark Mode */
         .dark-mode .card { 
             background-color: #1f1f1f; /* Dark background for cards */
             border: 1px solid rgba(255, 255, 255, 0.1); /* Light border */
@@ -455,7 +437,7 @@
     </div>
 
     <script>
-        const SERVER_URL = "http://localhost:3000";
+        const SERVER_URL = "https://graeme-unintegrated-richelle.ngrok-free.dev";
         let allIncidents = [];
         let sortOrder = { column: null, ascending: true };
 
@@ -662,19 +644,11 @@
         function showIncidentMap(location, lat, lng) {
             const mapFrame = document.getElementById("mapFrame");
             let mapUrl = "";
-
-            // NOTE: The previous map URLs were incomplete/malformed. 
-            // This structure creates a standard Google Maps embed URL using the provided data.
-            // You must use a valid API key and embed URL format for this to work in a real application.
-            // For now, it uses a generic example structure.
-
             if (lat && lng) {
                 const latitude = parseFloat(lat);
                 const longitude = parseFloat(lng);
-                // Standard Google Maps Embed URL format using coordinates
                 mapUrl = `https://maps.google.com/maps?q=${latitude},${longitude}&hl=en&z=15&output=embed`;
             } else {
-                // Standard Google Maps Embed URL format using location search term
                 mapUrl = `https://maps.google.com/maps?q=${encodeURIComponent(location)}&hl=en&z=15&output=embed`;
             }
             
@@ -719,7 +693,6 @@
                     }
                 }
             });
-
             window.statusChartInstance = new Chart(document.getElementById("statusChart"), {
                 type: 'bar',
                 data: { 
@@ -756,7 +729,6 @@
                 }
             });
         }
-
         function renderLineChart(incidents) {
             const countsByDate = {};
             incidents.forEach(i => {
@@ -765,9 +737,7 @@
             });
             const labels = Object.keys(countsByDate).sort((a,b) => new Date(a)-new Date(b));
             const data = labels.map(d => countsByDate[d]);
-
             if (window.lineChartInstance) window.lineChartInstance.destroy();
-
             window.lineChartInstance = new Chart(document.getElementById("lineChart"), {
                 type: 'line',
                 data: { 
@@ -817,7 +787,6 @@
         document.getElementById("statusFilter").addEventListener("change", applyFilters);
         document.getElementById("barangayFilter").addEventListener("change", applyFilters);
         document.getElementById("incidentSearch").addEventListener("input", applyFilters);
-        
         document.getElementById("dateFilter").addEventListener("change", () => {
             const value = document.getElementById("dateFilter").value;
             const startInput = document.getElementById("startDate");
@@ -838,16 +807,9 @@
         function loadData() {
             showActiveRescuers();
             loadIncidents();
-            // loadAdminProfile is intentionally called only when the profile card is toggled, 
-            // but you might want to call it on page load to populate the navbar name.
-            // loadAdminProfile(); 
         }
-
-        // Set interval to refresh data every 10 seconds
         setInterval(loadData, 10000);
-        // Initial data load
         loadData();
     </script>
-
 </body>
 </html>

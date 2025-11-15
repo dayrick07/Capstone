@@ -1,0 +1,5 @@
+# Path to Android SDK
+sdk.dir=C\:\\Users\\Dayrick's pc\\AppData\\Local\\Android\\Sdk
+
+# Path to NDK (Side by side)
+ndk.dir=C\:\\Users\\Dayrick's pc\\AppData\\Local\\Android\\Sdk\\ndk\\25.2.9519653

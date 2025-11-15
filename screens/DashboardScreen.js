@@ -75,42 +75,48 @@ export default function DashboardScreen({ navigation, route }) {
 
   // --------------------------- REPORT INCIDENT ---------------------------
   const reportIncident = async (service, immediateCall = false) => {
-    try {
-      let { status } = await Location.getForegroundPermissionsAsync();
-      if (status !== "granted") {
-        status = (await Location.requestForegroundPermissionsAsync()).status;
-      }
-      if (status !== "granted") {
-        Alert.alert("Permission Denied", "Location access is required.");
-        return false;
-      }
-
-      const { coords } = await Location.getCurrentPositionAsync({
-        accuracy: Location.Accuracy.High,
-      });
-      const { latitude, longitude } = coords;
-      const [address] = await Location.reverseGeocodeAsync({ latitude, longitude });
-      const locationText = `${address.name || ""}, ${address.city || ""}, ${address.region || ""}`;
-
-      const response = await axios.post(`${SERVER_URL}/incidents`, {
-        Type: service,
-        Location: locationText,
-        Latitude: latitude,
-        Longitude: longitude,
-        Status: immediateCall ? "Calling 911" : "Pending",
-        UserId: loggedInUser.Id,
-      });
-
-      if (response.data.success && !immediateCall) {
-        Alert.alert("✅ Success", "Incident reported to system!");
-      }
-      return response.data.success;
-    } catch (err) {
-      console.error(err);
-      Alert.alert("Error", "Failed to report incident. Check server connectivity.");
+  try {
+    let { status } = await Location.getForegroundPermissionsAsync();
+    if (status !== "granted") {
+      status = (await Location.requestForegroundPermissionsAsync()).status;
+    }
+    if (status !== "granted") {
+      Alert.alert("Permission Denied", "Location access is required.");
       return false;
     }
-  };
+
+    const { coords } = await Location.getCurrentPositionAsync({
+      accuracy: Location.Accuracy.High,
+    });
+    const { latitude, longitude } = coords;
+    const [address] = await Location.reverseGeocodeAsync({ latitude, longitude });
+    const locationText = `${address.name || ""}, ${address.city || ""}, ${address.region || ""}`;
+
+    const response = await axios.post(`${SERVER_URL}/incidents`, {
+      Type: service,
+      Location: locationText,
+      Latitude: latitude,
+      Longitude: longitude,
+      Status: immediateCall ? "Calling 911" : "Pending",
+      UserId: loggedInUser.Id,
+    });
+
+    if (response.data.success) {
+      Alert.alert("✅ Success", "Incident reported to system!");
+
+      // Automatically call main admin/rescuer head
+      const canCall = await Linking.canOpenURL(MAIN_ADMIN_NUMBER);
+      if (canCall) await Linking.openURL(MAIN_ADMIN_NUMBER);
+    }
+
+    return response.data.success;
+  } catch (err) {
+    console.error(err);
+    Alert.alert("Error", "Failed to report incident. Check server connectivity.");
+    return false;
+  }
+};
+
 
   // --------------------------- EMERGENCY CALL ---------------------------
   const handleEmergencyCall = async (service) => {
