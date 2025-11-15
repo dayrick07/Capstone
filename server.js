@@ -14,7 +14,7 @@ app.use(bodyParser.json());
 const config = {
   user: 'app_user',
   password: '123',
-  server: 'localhost', // change to your local IP if testing on mobile
+  server: '192.168.0.111', // change to your local IP if testing on mobile
   database: 'SafeKaFernandino',
   options: {
     encrypt: false,
@@ -100,8 +100,6 @@ app.post('/children/signup', async (req, res) => {
     res.status(500).json({ success: false, message: 'Server error during child signup.' });
   }
 });
-
-
 
 // ---------------- 🧍‍♂️ RESCUER SIGNUP ----------------
 app.post('/rescuers/signup', async (req, res) => {

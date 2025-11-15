@@ -2,6 +2,7 @@
   "expo": {
     "name": "Safekafe",
     "slug": "Safekafe",
+    "owner": "dayrick07",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -34,7 +35,9 @@
         "RECORD_AUDIO",
         "WRITE_EXTERNAL_STORAGE",
         "READ_EXTERNAL_STORAGE",
-        "BODY_SENSORS"
+        "BODY_SENSORS",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.MODIFY_AUDIO_SETTINGS"
       ]
     },
     "web": {
@@ -42,7 +45,7 @@
     },
     "extra": {
       "eas": {
-        "projectId": "cb4ebc0f-ad74-4a07-951b-ffb3b503b4de"
+        "projectId": "2e0b68e1-9fd9-4f4c-9926-b35839f12541"
       }
     },
     "plugins": [

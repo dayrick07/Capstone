@@ -1,4 +1,4 @@
-package com.alfonsose7.Safekafe
+package com.safekafe
 
 import android.app.Application
 import android.content.res.Configuration
