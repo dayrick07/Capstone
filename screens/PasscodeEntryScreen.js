@@ -1,6 +1,5 @@
 import React, { useState, useContext } from "react";
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
 import { ThemeContext } from "../ThemeContext"; // Adjust path as necessary
 import { getParentalPasscode } from "./ParentalSetupScreen"; // Import the getter function
 

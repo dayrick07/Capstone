@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin ID Verification Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f7f9fb;
+        }
+        /* Custom scrollbar for better aesthetics */
+        .scroll-container::-webkit-scrollbar {
+            width: 8px;
+        }
+        .scroll-container::-webkit-scrollbar-thumb {
+            background-color: #9ca3af;
+            border-radius: 4px;
+        }
+        .scroll-container::-webkit-scrollbar-track {
+            background-color: #e5e7eb;
+        }
+    </style>
+</head>
+<body class="min-h-screen">
+
+    <header class="bg-red-700 shadow-lg p-4 sticky top-0 z-10">
+        <div class="max-w-7xl mx-auto flex justify-between items-center">
+            <h1 class="text-2xl font-bold text-white">ID Verification Portal</h1>
+            <nav>
+                <a href="admin-landing.html" class="text-white hover:text-red-300 transition duration-200 text-sm font-medium border border-white px-3 py-1 rounded-lg">
+                    ← Back to Menu
+                </a>
+            </nav>
+        </div>
+    </header>
+
+    <main class="max-w-7xl mx-auto p-4 sm:p-6 lg:p-8">
+        
+        <div id="status-message" class="hidden p-4 mb-6 text-sm font-medium border rounded-lg" role="alert"></div>
+
+        <h2 class="text-3xl font-semibold text-gray-800 mb-6 border-b pb-2">
+            Pending Verifications
+        </h2>
+
+        <div id="loading" class="text-center p-10 hidden">
+            <svg class="animate-spin h-8 w-8 text-red-700 mx-auto mb-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+            <p class="text-gray-500">Fetching user data...</p>
+        </div>
+
+        <div id="user-list" class="space-y-4">
+            </div>
+
+        <div id="no-users" class="hidden bg-white p-10 rounded-xl shadow-md text-center">
+            <p class="text-lg text-gray-500 font-medium">🎉 All pending IDs have been verified. Great job!</p>
+        </div>
+
+    </main>
+
+    <script>
+        // *** CONFIGURATION ***
+        // !! IMPORTANT: UPDATE THIS TO YOUR ACTUAL BACKEND SERVER URL !!
+        const SERVER_URL = "https://graeme-unintegrated-richelle.ngrok-free.dev"; 
+        
+        const userListContainer = document.getElementById('user-list');
+        const loadingIndicator = document.getElementById('loading');
+        const noUsersMessage = document.getElementById('no-users');
+        const statusMessage = document.getElementById('status-message');
+
+        // --- Utility Functions ---
+
+        /** Displays a temporary status message (replaces alert()) */
+        function showStatus(message, type = 'success') {
+            statusMessage.textContent = message;
+            statusMessage.classList.remove('hidden', 'bg-red-100', 'border-red-400', 'text-red-700', 'bg-green-100', 'border-green-400', 'text-green-700');
+            
+            if (type === 'success') {
+                statusMessage.classList.add('bg-green-100', 'border-green-400', 'text-green-700', 'border-green-400');
+            } else {
+                statusMessage.classList.add('bg-red-100', 'border-red-400', 'text-red-700', 'border-red-400');
+            }
+            statusMessage.classList.remove('hidden');
+
+            setTimeout(() => {
+                statusMessage.classList.add('hidden');
+            }, 5000);
+        }
+
+        /** Formats date string to readable format */
+        function formatDate(dateString) {
+            if (!dateString) return 'N/A';
+            // Use UTC to prevent timezone issues with simple date strings
+            const date = new Date(dateString); 
+            return date.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric', timeZone: 'UTC' });
+        }
+
+        // --- API Integration ---
+        
+        /** Fetches users where IsIdVerified = 0. Assumes backend route is /admin/unverified-users */
+        async function fetchUnverifiedUsers() {
+            loadingIndicator.classList.remove('hidden');
+            userListContainer.innerHTML = '';
+            noUsersMessage.classList.add('hidden');
+
+            try {
+                // Fetching from the required backend route
+                const response = await fetch(`${SERVER_URL}/admin/unverified-users`);
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                const users = await response.json();
+                
+                renderUsers(users); 
+                
+            } catch (error) {
+                console.error('Error fetching unverified users:', error);
+                showStatus('Failed to load user list. Check if the server is running and the route is implemented.', 'error');
+            } finally {
+                loadingIndicator.classList.add('hidden');
+            }
+        }
+
+        /** Updates IsIdVerified = 1 for a specific user. Assumes backend route is /admin/verify-user */
+        async function handleVerification(userId, userCardElement) {
+            if (!window.confirm(`Are you sure you want to verify User ID ${userId}? This action is irreversible and should only be performed after careful review.`)) {
+                return;
+            }
+
+            const verifyBtn = userCardElement.querySelector('.verify-btn');
+            verifyBtn.disabled = true;
+            verifyBtn.textContent = 'Verifying...';
+
+            try {
+                const response = await fetch(`${SERVER_URL}/admin/verify-user`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ userId: userId })
+                });
+
+                const result = await response.json();
+
+                if (response.ok && result.success) {
+                    showStatus(result.message, 'success');
+                    // Visually remove the card upon successful verification
+                    userCardElement.classList.add('opacity-0', 'scale-95', 'transform', 'transition-all', 'duration-500');
+                    setTimeout(() => {
+                        userCardElement.remove();
+                        if (userListContainer.children.length === 0) {
+                            noUsersMessage.classList.remove('hidden');
+                        }
+                    }, 500);
+
+                } else {
+                    const errorMessage = result.message || 'Unknown error during verification.';
+                    showStatus(`Verification failed: ${errorMessage}`, 'error');
+                    verifyBtn.disabled = false;
+                    verifyBtn.textContent = 'Verify ID';
+                }
+
+            } catch (error) {
+                console.error('Verification Error:', error);
+                showStatus('A network error occurred during verification. Check console.', 'error');
+                verifyBtn.disabled = false;
+                verifyBtn.textContent = 'Verify ID';
+            }
+        }
+        
+        // --- Rendering Logic ---
+
+        /** Renders the list of users as cards */
+        function renderUsers(users) {
+            if (users.length === 0) {
+                noUsersMessage.classList.remove('hidden');
+                return;
+            }
+
+            users.forEach(user => {
+                const card = document.createElement('div');
+                card.id = `user-card-${user.id}`;
+                card.classList.add('bg-white', 'p-6', 'rounded-xl', 'shadow-lg', 'flex', 'flex-col', 'lg:flex-row', 'gap-6', 'mb-4', 'border-l-4', 'border-red-700');
+
+                // User Details Section
+                const detailsHtml = `
+                    <div class="lg:w-1/2">
+                        <h3 class="text-xl font-bold text-gray-900 mb-4 border-b pb-2">User #${user.Id} - ${user.Name}</h3>
+                        <div class="space-y-2 text-sm text-gray-700">
+                            <p><strong>Email:</strong> ${user.Email}</p>
+                            <p><strong>Mobile:</strong> ${user.Mobile}</p>
+                            <p><strong>Address:</strong> ${user.Address}</p>
+                            <p><strong>Birthdate:</strong> ${formatDate(user.Birthdate)}</p>
+                            <p><strong>Gender:</strong> ${user.Gender || 'N/A'}</p>
+                            <p><strong>Language:</strong> ${user.Language || 'N/A'}</p>
+                        </div>
+                    </div>
+                `;
+
+                // Calculate the full URL for the image. 
+                // Fix: Replace backslashes (\) with forward slashes (/) to create a valid URL path.
+                const imagePath = user.ValidIdPath ? `${SERVER_URL}${user.ValidIdPath.replace(/\\/g, '/')}` : '';
+                const idUploaded = !!user.ValidIdPath;
+                
+                // ID Review and Action Section
+                const idReviewHtml = `
+                    <div class="lg:w-1/2 flex flex-col">
+                        <h3 class="text-xl font-bold text-red-700 mb-2">Valid ID Review</h3>
+                        <p class="text-xs text-gray-500 mb-3 truncate" title="${imagePath}">Path: 
+                            ${idUploaded ? `<a href="${imagePath}" target="_blank" class="text-blue-500 hover:underline">${user.ValidIdPath.split(/[\\/]/).pop()}</a>` : 'N/A'}
+                        </p>
+                        
+                        <div class="flex-grow flex justify-center items-center ${idUploaded ? 'bg-gray-100' : 'bg-gray-200'} rounded-lg overflow-hidden h-48 mb-4 shadow-inner">
+                            ${idUploaded ? `
+                                <img src="${imagePath}" 
+                                    alt="User ID" 
+                                    class="object-contain w-full h-full p-2 cursor-pointer"
+                                    onclick="window.open('${imagePath}', '_blank')"
+                                    onerror="this.onerror=null;this.src='https://placehold.co/400x150/ef4444/ffffff?text=Image+Load+Failed';this.classList.add('p-0');"
+                                >
+                            ` : `
+                                <p class="text-gray-400 p-4 text-center font-semibold">
+                                    ❌ No ID File Uploaded
+                                </p>
+                            `}
+                        </div>
+                        
+                        <button 
+                            class="verify-btn bg-green-500 hover:bg-green-600 text-white font-semibold py-3 px-4 rounded-lg shadow-md transition duration-300 w-full disabled:bg-gray-400 disabled:cursor-not-allowed"
+                            data-user-id="${user.Id}"
+                            ${idUploaded ? '' : 'disabled title="Cannot verify: No ID uploaded"'}
+                        >
+                            ${idUploaded ? 'Verify ID' : 'No ID to Verify'}
+                        </button>
+                    </div>
+                `;
+                
+                card.innerHTML = detailsHtml + idReviewHtml;
+                
+                // Attach event listener to the button
+                const verifyBtn = card.querySelector('.verify-btn');
+                verifyBtn.addEventListener('click', () => handleVerification(user.Id, card));
+
+                userListContainer.appendChild(card);
+            });
+        }
+
+        // --- Initialization ---
+        document.addEventListener('DOMContentLoaded', fetchUnverifiedUsers);
+    </script>
+</body>
+</html>

@@ -8,7 +8,7 @@ export default function TutorialScreen({ navigation }) {
   const theme = {
     background: isDarkMode ? "#121212" : "#fff",
     text: isDarkMode ? "#fff" : "#333",
-    primary: isDarkMode ? "#A83232" : "#A83232", // button color remains same
+    primary: isDarkMode ? "#A83232" : "#A83232",
     secondaryText: isDarkMode ? "#ccc" : "#333",
   };
   return (

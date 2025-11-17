@@ -7,6 +7,7 @@ const path = require('path');
 const { generateOTP } = require('./generate_otp'); 
 const axios = require('axios');
 const app = express();
+const multer = require('multer');
 app.use(cors());
 app.use(bodyParser.json());
 
@@ -71,6 +72,42 @@ app.post('/users/signup', async (req, res) => {
         res.status(500).json({ success: false, message: 'Server error.' });
     }
 });
+// Fetch users where IsIdVerified = 0
+app.get('/admin/unverified-users', async (req, res) => {
+    try {
+        const pool = await sql.connect(config);
+        const result = await pool.request()
+            .query(`SELECT Id, Name, Email, Mobile, Address, Birthdate, Gender, Language, ValidIdPath
+                    FROM Users
+                    WHERE IsIdVerified = 0`);
+
+        res.json(result.recordset);
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ success: false, message: 'Failed to fetch users.' });
+    }
+});
+// Mark a user's ID as verified
+app.post('/admin/verify-user', async (req, res) => {
+    const { userId } = req.body;
+
+    if (!userId) {
+        return res.status(400).json({ success: false, message: 'Missing userId.' });
+    }
+
+    try {
+        const pool = await sql.connect(config);
+        await pool.request()
+            .input('UserId', sql.Int, userId)
+            .query(`UPDATE Users SET IsIdVerified = 1 WHERE Id = @UserId`);
+
+        res.json({ success: true, message: `User #${userId} verified successfully.` });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ success: false, message: 'Failed to verify user.' });
+    }
+});
+
 // ---------------- 🧒 CHILD SIGNUP ----------------
 app.post('/children/signup', async (req, res) => {
   const { parentId, name, email, password, gender, birthdate } = req.body;
@@ -306,13 +343,16 @@ app.post('/users/login', async (req, res) => {
     const match = await bcrypt.compare(password, user.PasswordHash);
     if (!match) return res.status(400).send({ success: false, message: 'Incorrect password.' });
 
-    res.send({
-      success: true,
-      userId: user.Id,
-      name: user.Name,
-      email: user.Email,
-      mobile: user.mobile   // ✅ this is correct based on DB
-    });
+   res.send({
+  success: true,
+  user: {
+    Id: user.Id,
+    Name: user.Name,
+    Email: user.Email,
+    mobile: user.mobile
+  }
+});
+
 
   } catch (err) {
     console.error('❌ Login Error:', err);
@@ -678,7 +718,7 @@ app.get('/stations', async (req, res) => {
 });
 // ---------------- 🚨 CREATE INCIDENT WITH BACKGROUND SMS ----------------
 app.post('/incidents', async (req, res) => {
-    const { Type, Location, Latitude, Longitude, Status, UserId, ChildId, UserMobile } = req.body;
+    const { Type, Location, Latitude, Longitude, Status, UserId, ChildId, UserMobile, UserName } = req.body;
 
     if (!UserId && !ChildId) {
         return res.status(400).send({ success: false, message: "UserId or ChildId is required" });
@@ -701,34 +741,36 @@ app.post('/incidents', async (req, res) => {
                 VALUES (@Type, @Location, @Latitude, @Longitude, @Status, @UserId, @ChildId, GETDATE())
             `);
 
-        // 2️⃣ Respond immediately so the client is not blocked
+        // 2️⃣ Respond immediately so client is not blocked
         res.send({ success: true, message: "Incident reported! Admin is being notified." });
 
-        // 3️⃣ Send SMS in the background (non-blocking)
-        const adminMobile = '+639292760287';
+        // 3️⃣ Send SMS in background
+        const adminMobile = '+639752726146';
         const apiToken = 'd53783f0bbfd7010b6d873dcde2a0e34b3a824d7';
-        const message = `🚨 DISTRESS ALERT 🚨
+        const message = ` DISTRESS ALERT 
 Type: ${Type}
 Location: ${Location}
-Reported by: ${UserId || ChildId}
+Reported by: ${UserName || UserId || ChildId}
 User Phone: ${UserMobile || 'N/A'}`;
 
-        axios.post(
+        // Send via iProgSMS API (same pattern as OTP)
+        const smsResponse = await axios.post(
             'https://sms.iprogtech.com/api/v1/sms_messages',
-            { api_token: apiToken, phone_number: adminMobile, message },
+            {
+                api_token: apiToken,
+                phone_number: adminMobile,
+                message: message
+            },
             { headers: { 'Content-Type': 'application/json' } }
-        ).then(() => {
-            console.log(`[DISTRESS ALERT] Sent alert to ${adminMobile}`);
-        }).catch(err => {
-            console.error('❌ SMS Sending Failed:', err.message);
-        });
+        );
+
+        console.log(`[DISTRESS ALERT] Sent to ${adminMobile}`);
+        console.log('SMS API Response:', smsResponse.data);
 
     } catch (err) {
-        console.error('❌ Create Incident Error:', err);
-        res.status(500).send({ success: false, error: err.message });
+        console.error('❌ Create Incident Error:', err.response?.data || err.message);
     }
 });
-
 
 
 
@@ -793,40 +835,7 @@ app.put('/incidents/:id/status', async (req, res) => {
     res.status(500).json({ success: false, error: err.message });
   }
 });
-// ---------------- 📄 FETCH RESCUER HISTORY (Fixed) ----------------
-app.get('/rescuers/:id/history', async (req, res) => {
-  const rescuerId = parseInt(req.params.id);
 
-  if (isNaN(rescuerId) || rescuerId < 1) {
-    return res.status(400).send({ success: false, message: 'Invalid Rescuer ID.' });
-  }
-
-  try {
-    const pool = await getPool();
-    const result = await pool.request()
-      .input('rescuerId', sql.Int, rescuerId) 
-      .query(`
-        SELECT * FROM Incidents 
-        WHERE RescuerId = @rescuerId AND Status = 'Resolved' 
-        -- Status is set to 'Resolved' for completed cases.
-        -- If you have a separate 'Done' status, use Status IN ('Resolved', 'Done')
-        
-        -- FIX: Changed the sorting column from 'UpdatedAt' (which was invalid) 
-        -- to 'CreatedAt', which is available in your schema.
-        ORDER BY CreatedAt DESC 
-      `);
-
-    res.send({ success: true, incidents: result.recordset });
-  } catch (err) {
-    console.error('❌ Fetch Rescuer History Error:', err); 
-    
-    res.status(500).send({ 
-        success: false, 
-        error: 'Internal Server Error during history fetch.', 
-        details: err.message || 'Check server logs for database error.' 
-    });
-  }
-});
 // ---------------- 📞 EMERGENCY CONTACTS ----------------
 // Create a new contact
 app.post('/contacts', async (req, res) => {
@@ -955,11 +964,11 @@ app.get('/admin-login', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'admin-login-signup.html'));
 });
 
-// Dashboard page
+// ----------Dashboard page
 app.get('/admin-dashboard', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'admin-dashboard.html'));
 });
-// Optional: redirect root to admin login
+// ----------Optional: redirect root to admin login
 app.get('/', (req, res) => {
   res.redirect('/admin-login');
 });

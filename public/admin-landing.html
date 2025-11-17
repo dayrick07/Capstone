@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Area Selection</title>
+    <!-- Load Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f7f9fb;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex items-center justify-center p-4">
+
+    <div class="w-full max-w-lg bg-white p-8 rounded-2xl shadow-2xl border border-gray-100">
+        <h1 class="text-3xl font-extrabold text-gray-800 mb-6 text-center">
+            Welcome, Admin
+        </h1>
+        <p class="text-gray-500 mb-8 text-center">
+            Please select the area you wish to manage.
+        </p>
+
+        <div class="space-y-6">
+            
+            <!-- Option 1: Main Dashboard (Placeholder) -->
+            <a href="admin-dashboard.html" class="block">
+                <button
+                    class="w-full bg-red-700 hover:bg-red-800 text-white font-semibold py-4 px-6 rounded-xl transition duration-300 shadow-lg hover:shadow-xl transform hover:scale-[1.01] flex items-center justify-between"
+                    
+                >
+                    <span class="text-xl">📊 Go to Main Dashboard</span>
+                    <span class="text-sm font-light opacity-80"></span>
+                </button>
+            </a>
+
+            <!-- Option 2: ID Verification (Links to the existing file) -->
+            <a href="admin-verify.html" class="block">
+                <button
+                    class="w-full bg-green-500 hover:bg-green-600 text-white font-semibold py-4 px-6 rounded-xl transition duration-300 shadow-lg hover:shadow-xl transform hover:scale-[1.01] flex items-center justify-between"
+                >
+                    <span class="text-xl">✅ Verify User IDs</span>
+                    <span class="text-sm font-light opacity-80">Pending Review</span>
+                </button>
+            </a>
+
+        </div>
+
+        <div class="mt-8 text-center">
+            <a href="admin-login-signup.html" class="text-sm text-gray-500 hover:text-red-700 transition duration-300">
+                Log Out
+            </a>
+        </div>
+    </div>
+
+</body>
+</html>

@@ -1,5 +1,3 @@
-// RescuerHomeScreen.js
-
 import React, { useState, useEffect, useCallback } from "react";
 import {
     View,
@@ -11,6 +9,7 @@ import {
     ActivityIndicator,
     ScrollView,
     Linking,
+    SafeAreaView, // Added for better screen layout
 } from "react-native";
 import axios from "axios";
 import { SERVER_URL } from "../config";
@@ -20,7 +19,9 @@ const formatTimestamp = (timestamp) => {
     if (!timestamp) return "N/A";
     try {
         const date = new Date(timestamp);
-        return date.toLocaleString();
+        // Use a more compact, high-contrast date format
+        return date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) + ' ' + 
+               date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
     } catch (e) {
         return "Invalid Date";
     }
@@ -33,15 +34,18 @@ const INCIDENT_TYPES = [
     "Ambulance",
 ];
 
-// Color map for card borders and text based on status/assignment
+// Color map for status/priority - Updated for dark theme contrast
 const STATUS_FALLBACK_COLORS = {
-    'Pending': '#FFC107',
-    'Accepted': '#28A745',
-    'Resolved': '#343A40', // Color for resolved incidents
-    'Critical': '#DC3545',
-    'High': '#FFC107',
-    'Medium': '#007BFF',
-    'Low': '#6C757D',
+    // Priority Colors (Used for Highlighting Cards)
+    'Critical': '#FF4D6D', // Sharp Red/Pink for high urgency
+    'High': '#FFC300',     // Amber for immediate attention
+    'Medium': '#4CC9F0',   // Electric Blue for standard response
+    'Low': '#8D99AE',      // Muted Grey for lower urgency
+
+    // Status Colors (Used for text and assignments)
+    'Pending': '#FFC300',  // Amber
+    'Accepted': '#70E000', // Bright Green
+    'Resolved': '#3A3A5A', // Darker background color for resolved text
 };
 
 // Barangays of San Fernando, Pampanga 
@@ -69,7 +73,7 @@ export default function RescuerHomeScreen({ navigation, route }) {
     if (isNaN(numericRescuerId) || numericRescuerId === 0) {
         console.error("Invalid Rescuer ID detected:", rawId);
         Alert.alert("Error", "Rescuer ID is invalid. Please log in again.");
-        return <View style={styles.loadingContainer}><Text>Error loading user ID.</Text></View>;
+        return <View style={styles.loadingContainer}><Text style={styles.textBase}>Error loading user ID.</Text></View>;
     }
 
     const [allIncidents, setAllIncidents] = useState([]);
@@ -223,34 +227,54 @@ export default function RescuerHomeScreen({ navigation, route }) {
         const isResolved = item.Status === 'Resolved';
         const isAcceptedByMe = isAssignedToMe && item.Status === 'Accepted';
 
-        let borderStyle = styles.cardPending;
+        // Determine border color based on Priority or Status
+        let borderColor = STATUS_FALLBACK_COLORS.Low; // Default
+        let priorityText = item.Priority || 'N/A';
 
         if (isResolved) {
-            borderStyle = styles.cardResolved;
-        } else if (item.Priority && STATUS_FALLBACK_COLORS[item.Priority]) {
-            borderStyle = { borderLeftColor: STATUS_FALLBACK_COLORS[item.Priority] };
-        } else if (isAssignedToMe) {
-            borderStyle = styles.cardAssigned;
+            // Resolved cards use a dedicated color/style
+            borderColor = STATUS_FALLBACK_COLORS.Resolved;
+        } else if (item.Priority) {
+            borderColor = STATUS_FALLBACK_COLORS[item.Priority] || STATUS_FALLBACK_COLORS.High;
         }
+        
+        // Overrides for self-assigned incidents for immediate visibility
+        if (isAcceptedByMe) {
+             borderColor = STATUS_FALLBACK_COLORS.Accepted;
+        }
+
 
         const cardStyle = [
             styles.card,
-            borderStyle
+            { borderLeftColor: borderColor, borderLeftWidth: isResolved ? 5 : 8, opacity: isResolved ? 0.7 : 1 },
         ];
+        
+        const statusColor = isResolved 
+            ? STATUS_FALLBACK_COLORS.Resolved 
+            : (isAssignedToMe ? STATUS_FALLBACK_COLORS.Accepted : STATUS_FALLBACK_COLORS.Critical);
+
 
         return (
             <View style={cardStyle}>
-                <Text style={styles.title}>{item.Type}</Text>
-                <Text>⭐ Priority: **{item.Priority || 'N/A'}**</Text> 
-                <Text>📍 {item.Location}</Text>
-                
-                <Text style={styles.timestamp}>
-                    Reported: {formatTimestamp(item.CreatedAt)}
-                </Text>
+                <View style={styles.cardHeader}>
+                    <Text style={styles.cardTitle}>{item.Type}</Text>
+                    <Text style={[styles.priorityBadge, { backgroundColor: borderColor }]}>
+                        {priorityText}
+                    </Text>
+                </View>
+
+                <View style={styles.infoRow}>
+                    <Text style={styles.textBase}>📍 Location: **{item.Location}**</Text>
+                    <Text style={styles.timestamp}>
+                        {formatTimestamp(item.CreatedAt)}
+                    </Text>
+                </View>
+
                 {item.SenderContact && (
-                    <Text>📞 Sender: **{item.SenderContact}**</Text>
+                    <Text style={styles.textBase}>📞 Sender: **{item.SenderContact}**</Text>
                 )}
-                <Text style={[styles.statusText, {color: isResolved ? STATUS_FALLBACK_COLORS.Resolved : (isAssignedToMe ? STATUS_FALLBACK_COLORS.Accepted : '#8B0000')}]}>
+                
+                <Text style={[styles.statusText, {color: statusColor}]}>
                     Status: **{item.Status}** {assignedRescuerId ? ` (Assigned ID: ${assignedRescuerId})` : ''}
                 </Text>
 
@@ -259,7 +283,7 @@ export default function RescuerHomeScreen({ navigation, route }) {
                         style={[styles.button, styles.buttonMap]}
                         onPress={() => handleViewOnMap(item)}
                     >
-                        <Text style={styles.buttonText}>🗺️ View on Map</Text>
+                        <Text style={styles.buttonText}>🗺️ Map</Text>
                     </TouchableOpacity>
 
                     {item.SenderContact && (
@@ -267,7 +291,7 @@ export default function RescuerHomeScreen({ navigation, route }) {
                             style={[styles.button, styles.buttonCall]}
                             onPress={() => handleCall(item.SenderContact)}
                         >
-                            <Text style={styles.buttonText}>📞 Call Sender</Text>
+                            <Text style={styles.buttonText}>📞 Call</Text>
                         </TouchableOpacity>
                     )}
                 </View>
@@ -315,9 +339,10 @@ export default function RescuerHomeScreen({ navigation, route }) {
     };
 
     return (
-        <View style={styles.container}>
-            <Text style={styles.header}>🚨 All Incidents (Active & Resolved)</Text>
+        <SafeAreaView style={styles.container}>
+            <Text style={styles.header}>SF-PAMPANGA 🚨 INCIDENTS</Text>
 
+            {/* Rescuer Status Toggle */}
             <TouchableOpacity
                 style={[styles.statusToggle, isRescuerActive ? styles.statusActive : styles.statusOffline]}
                 onPress={toggleRescuerStatus}
@@ -327,41 +352,37 @@ export default function RescuerHomeScreen({ navigation, route }) {
                     <ActivityIndicator color="#fff" />
                 ) : (
                     <Text style={styles.statusToggleText}>
-                        Status: **{isRescuerActive ? 'Active' : 'Offline'}**
+                        STATUS: **{isRescuerActive ? 'ACTIVE' : 'OFFLINE'}**
                     </Text>
                 )}
             </TouchableOpacity>
 
-            {/* --- SORT TOGGLE BUTTON --- */}
-            <TouchableOpacity
-                style={styles.sortToggle}
-                onPress={toggleSortOrder}
-            >
-                <Text style={styles.sortToggleText}>
-                    Sort Order: **{sortOrder === 'descending' ? '⬇️ Newest First' : '⬆️ Oldest First'}**
-                </Text>
-            </TouchableOpacity>
-            {/* --------------------------- */}
-
-
-            <ScrollView contentContainerStyle={styles.filtersWrapper}>
-
+            <ScrollView contentContainerStyle={styles.filtersWrapper} horizontal={false}>
+                {/* SORT TOGGLE BUTTON */}
+                <TouchableOpacity
+                    style={styles.sortToggle}
+                    onPress={toggleSortOrder}
+                >
+                    <Text style={styles.sortToggleText}>
+                        {sortOrder === 'descending' ? '⬇️ SORT: Newest First' : '⬆️ SORT: Oldest First'}
+                    </Text>
+                </TouchableOpacity>
+                {/* --------------------------- */}
+                
+                {/* Filter by Type */}
                 <View style={styles.filterContainer}>
-                    <Text style={styles.filterLabel}>Filter by Type:</Text>
+                    <Text style={styles.filterLabel}>Filter by Service:</Text>
                     <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.scrollContainer}>
                         {INCIDENT_TYPES.map(type => (
                             <TouchableOpacity
                                 key={type}
                                 style={[
                                     styles.filterButton,
-                                    selectedTypes.includes(type) && styles.filterButtonActive
+                                    selectedTypes.includes(type) ? styles.filterButtonActive : styles.filterButtonInactive
                                 ]}
                                 onPress={() => handleTypeSelect(type)}
                             >
-                                <Text style={[
-                                    styles.filterButtonText,
-                                    selectedTypes.includes(type) && styles.filterButtonTextActive
-                                ]}>
+                                <Text style={styles.filterButtonText}>
                                     {type}
                                 </Text>
                             </TouchableOpacity>
@@ -373,69 +394,90 @@ export default function RescuerHomeScreen({ navigation, route }) {
 
             <FlatList
                 data={incidents}
-                keyExtractor={(item) => item.Id.toString()}
+                keyExtractor={(item) => (item.Id || item.id).toString()}
                 refreshing={loading}
                 onRefresh={fetchIncidents}
                 renderItem={renderIncidentCard}
+                contentContainerStyle={styles.flatListContent}
                 ListEmptyComponent={() => (
                     !loading && <Text style={styles.noIncidents}>No incidents matching your filters.</Text>
                 )}
             />
 
+            {/* Floating Action Button (FAB) for Profile */}
             <TouchableOpacity
-                style={styles.profileButton}
+                style={styles.profileFab}
                 onPress={() =>
                     navigation.navigate("RescuerPageScreen", {
                         rescuerData: rescuerData,
                     })
                 }
             >
-                <Text style={styles.profileText}>👤 View Profile</Text>
+                <Text style={styles.profileFabText}>👤</Text>
             </TouchableOpacity>
-        </View>
+        </SafeAreaView>
     );
 }
 
 const styles = StyleSheet.create({
+    // --- BASE STYLES ---
     container: {
         flex: 1,
-        backgroundColor: '#f8f8f8',
-        paddingTop: 10,
+        backgroundColor: '#1A1A2E', // Dark, high-tech background
+    },
+    textBase: {
+        color: '#E0E0E0', // Light text color
+        fontSize: 14,
+        marginBottom: 3,
     },
     header: {
-        fontSize: 24,
-        fontWeight: 'bold',
+        fontSize: 26,
+        fontWeight: '900',
         textAlign: 'center',
-        marginVertical: 10,
-        color: '#333',
+        marginVertical: 15,
+        color: '#FFFFFF', // White header
+        textShadowColor: 'rgba(255, 255, 255, 0.5)',
+        textShadowOffset: { width: 0, height: 1 },
+        textShadowRadius: 5,
     },
+
+    // --- STATUS TOGGLE ---
     statusToggle: {
-        padding: 10,
+        padding: 12,
         marginHorizontal: 15,
-        borderRadius: 5,
+        borderRadius: 8,
         alignItems: 'center',
-        marginBottom: 8,
+        marginBottom: 10,
+        // Added shadow for depth
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 5,
+        elevation: 8,
     },
     statusActive: {
-        backgroundColor: '#28A745',
+        backgroundColor: '#70E000', // Bright Green
     },
     statusOffline: {
-        backgroundColor: '#DC3545',
+        backgroundColor: '#DC3545', // Sharp Red
     },
     statusToggleText: {
         color: '#fff',
         fontWeight: 'bold',
+        fontSize: 16,
     },
+
+    // --- SORT & FILTER ---
     sortToggle: { 
-        padding: 8,
-        marginHorizontal: 15,
-        borderRadius: 5,
+        padding: 10,
+        marginHorizontal: 0,
+        borderRadius: 8,
         alignItems: 'center',
         marginBottom: 10,
-        backgroundColor: '#007BFF', 
+        backgroundColor: '#3A3A5A', // Muted dark blue
     },
     sortToggleText: { 
-        color: '#fff',
+        color: '#4CC9F0', // Electric blue for emphasis
         fontWeight: 'bold',
     },
     filtersWrapper: {
@@ -443,13 +485,13 @@ const styles = StyleSheet.create({
         paddingBottom: 10,
     },
     filterContainer: {
-        marginBottom: 10,
+        marginBottom: 15,
     },
     filterLabel: {
         fontSize: 14,
         fontWeight: 'bold',
-        marginBottom: 5,
-        color: '#555',
+        marginBottom: 8,
+        color: '#FFD166', // Accent color for labels
     },
     scrollContainer: {
         flexDirection: 'row',
@@ -458,126 +500,157 @@ const styles = StyleSheet.create({
         paddingVertical: 8,
         paddingHorizontal: 15,
         borderRadius: 20,
-        borderWidth: 1,
-        borderColor: '#007BFF',
         marginRight: 10,
-        backgroundColor: '#fff',
+        borderWidth: 2,
     },
     filterButtonActive: {
-        backgroundColor: '#007BFF',
+        borderColor: '#70E000', // Active Green border
+        backgroundColor: 'rgba(112, 224, 0, 0.2)', // Light green translucent background
+    },
+    filterButtonInactive: {
+        borderColor: '#555577', // Muted border
+        backgroundColor: '#2A2A4A',
     },
     filterButtonText: {
-        color: '#007BFF',
+        color: '#FFFFFF',
         fontSize: 14,
+        fontWeight: '600',
     },
-    filterButtonTextActive: {
-        color: '#fff',
-        fontWeight: 'bold',
+
+    // --- CARD STYLES ---
+    flatListContent: {
+        paddingBottom: 100, // Space for FAB
     },
     card: {
-        backgroundColor: '#fff',
+        backgroundColor: '#2A2A4A', // Dark card background
         padding: 15,
         marginVertical: 8,
         marginHorizontal: 15,
-        borderRadius: 8,
-        borderLeftWidth: 8,
+        borderRadius: 12,
+        borderLeftWidth: 8, // Width controlled inline
         shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 3,
-        elevation: 3,
+        shadowOffset: { width: 0, height: 5 },
+        shadowOpacity: 0.5,
+        shadowRadius: 10,
+        elevation: 10,
     },
-    cardPending: {
-        borderLeftColor: '#FFC107',
+    cardHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 8,
     },
-    cardAssigned: {
-        borderLeftColor: '#28A745',
-    },
-    cardResolved: {
-        borderLeftColor: '#343A40', // Dark grey for resolved
-    },
-    title: {
-        fontSize: 18,
+    cardTitle: {
+        fontSize: 20,
         fontWeight: 'bold',
+        color: '#FFFFFF', // White title
+    },
+    priorityBadge: {
+        paddingVertical: 4,
+        paddingHorizontal: 10,
+        borderRadius: 15,
+        color: '#1A1A2E', // Dark text on bright badge
+        fontWeight: 'bold',
+        fontSize: 12,
+        overflow: 'hidden', // Ensures border radius works on text
+    },
+    infoRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
         marginBottom: 5,
-        color: '#333',
     },
     timestamp: {
         fontSize: 12,
-        color: '#666',
-        marginTop: 5,
-        marginBottom: 8,
+        color: '#FFD166', // Amber time color
+        fontWeight: '500',
     },
     statusText: {
-        fontWeight: 'bold',
-        marginTop: 5,
-        fontSize: 14,
+        fontWeight: '900',
+        marginTop: 8,
+        fontSize: 15,
+        paddingTop: 5,
+        borderTopWidth: 1,
+        borderTopColor: '#3A3A5A',
     },
+    
+    // --- ACTION BUTTONS ---
     topActions: {
         flexDirection: 'row',
-        justifyContent: 'space-between',
-        marginTop: 10,
+        marginTop: 15,
+        marginBottom: 5,
     },
     actions: {
         flexDirection: 'row',
         marginTop: 10,
     },
     button: {
-        paddingVertical: 8,
+        paddingVertical: 10,
         paddingHorizontal: 12,
-        borderRadius: 5,
+        borderRadius: 8,
         alignItems: 'center',
-        marginRight: 10,
         flex: 1,
+        marginRight: 10,
     },
     buttonMap: {
-        backgroundColor: '#007BFF',
+        backgroundColor: '#4CC9F0', // Electric Blue
+        marginRight: 10,
     },
     buttonCall: {
-        backgroundColor: '#6C757D',
+        backgroundColor: '#FF4D6D', // Sharp Red/Pink
     },
     buttonAction: {
         flex: 1,
         marginRight: 10,
     },
     buttonAccept: {
-        backgroundColor: '#28A745',
+        backgroundColor: '#70E000', // Bright Green
     },
     buttonResolved: {
-        backgroundColor: '#DC3545',
+        backgroundColor: '#3A3A5A', // Dark Muted (as it's a final action)
     },
     buttonText: {
-        color: '#fff',
+        color: '#1A1A2E', // Dark text on bright buttons
         fontWeight: 'bold',
         fontSize: 14,
     },
     assignedNote: {
-        color: '#DC3545',
+        color: '#FFD166',
         marginTop: 10,
         fontStyle: 'italic',
         fontSize: 12,
+        textAlign: 'center',
+        padding: 5,
+        backgroundColor: '#3A3A5A',
+        borderRadius: 4,
     },
     noIncidents: {
         textAlign: 'center',
         marginTop: 50,
         fontSize: 16,
-        color: '#666',
+        color: '#8D99AE',
     },
-    profileButton: {
+    
+    // --- FLOATING ACTION BUTTON (FAB) ---
+    profileFab: {
         position: 'absolute',
-        bottom: 10, 
-        right: 15,
-        backgroundColor: '#6C757D',
-        padding: 12,
+        bottom: 30, 
+        right: 20,
+        backgroundColor: '#FFD166', // Bright yellow FAB
+        width: 55,
+        height: 55,
         borderRadius: 30,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.25,
-        shadowRadius: 3.84,
-        elevation: 5,
+        justifyContent: 'center',
+        alignItems: 'center',
+        shadowColor: '#FFD166',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.5,
+        shadowRadius: 10,
+        elevation: 15,
     },
-    profileText: {
-        color: '#fff',
-        fontWeight: 'bold',
+    profileFabText: {
+        fontSize: 28, // Large emoji icon
+        lineHeight: 30,
+        color: '#1A1A2E',
     },
 });

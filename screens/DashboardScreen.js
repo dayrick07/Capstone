@@ -13,15 +13,15 @@ import {
   StatusBar,
   ScrollView,
 } from "react-native";
+import { sendOfflineSMS } from '../utils/sendOfflineSMS';
 import Icon from "react-native-vector-icons/MaterialIcons";
 import { Ionicons } from "@expo/vector-icons";
 import { ThemeContext } from "../ThemeContext";
 import * as ImagePicker from "expo-image-picker";
 import * as Location from "expo-location";
 import axios from "axios";
-// Assuming you have a file named config.js in the parent directory containing SERVER_URL
 import { SERVER_URL } from "../config";
-
+const MAIN_ADMIN_NUMBER = "09752726146";
 const UNIFIED_EMERGENCY_NUMBER = "tel:911";
 
 // All required icons
@@ -42,6 +42,21 @@ export default function DashboardScreen({ navigation, route }) {
   const { isDarkMode, toggleTheme } = useContext(ThemeContext);
 
   const loggedInUser = route.params?.userData;
+
+  const reportDistress = async () => {
+  if (!loggedInUser) return;
+
+  const adminMobile = '09752726146';
+  const message = `🚨 DISTRESS ALERT 🚨
+Type: Police
+Location: Barangay ABC
+Reported by: ${loggedInUser.name}
+User Phone: ${loggedInUser.mobile || 'N/A'}`;
+
+  // Call the offline SMS function
+  await sendOfflineSMS(adminMobile, message);
+};
+
 
   // Redirect to login if user data is missing
   useEffect(() => {
@@ -74,7 +89,7 @@ export default function DashboardScreen({ navigation, route }) {
   // --------------------------------------------------------------------------
 
   // --------------------------- REPORT INCIDENT ---------------------------
-  const reportIncident = async (service, immediateCall = false) => {
+const reportIncident = async (service, immediateCall = false) => {
   try {
     let { status } = await Location.getForegroundPermissionsAsync();
     if (status !== "granted") {
@@ -89,24 +104,24 @@ export default function DashboardScreen({ navigation, route }) {
       accuracy: Location.Accuracy.High,
     });
     const { latitude, longitude } = coords;
+
     const [address] = await Location.reverseGeocodeAsync({ latitude, longitude });
     const locationText = `${address.name || ""}, ${address.city || ""}, ${address.region || ""}`;
 
+    // Send incident to backend — backend handles SMS
     const response = await axios.post(`${SERVER_URL}/incidents`, {
       Type: service,
       Location: locationText,
       Latitude: latitude,
       Longitude: longitude,
       Status: immediateCall ? "Calling 911" : "Pending",
-      UserId: loggedInUser.Id,
+      UserId: loggedInUser?.Id,
+      ChildId: loggedInUser?.ChildId || null,
+      UserMobile: loggedInUser?.Mobile || "",
     });
 
     if (response.data.success) {
-      Alert.alert("✅ Success", "Incident reported to system!");
-
-      // Automatically call main admin/rescuer head
-      const canCall = await Linking.canOpenURL(MAIN_ADMIN_NUMBER);
-      if (canCall) await Linking.openURL(MAIN_ADMIN_NUMBER);
+      Alert.alert("✅ Success", "Incident reported! SMS sent to admin.");
     }
 
     return response.data.success;
@@ -265,7 +280,7 @@ export default function DashboardScreen({ navigation, route }) {
             <Text style={[styles.label, themeStyles.text]}>Record Video</Text>
           </TouchableOpacity>
 
-          {/* Row 3: Utility/Setup (Re-added) */}
+          {/* Row 3: Utility/Setup */}
           <TouchableOpacity style={[styles.card, themeStyles.card]}>
             <Image source={icons.shortcuts} style={styles.icon} />
             <Text style={[styles.label, themeStyles.text]}>Shortcuts</Text>
@@ -281,7 +296,7 @@ export default function DashboardScreen({ navigation, route }) {
 
         </View>
 
-        {/* --- Menu Modal (Slide from left) --- */}
+        {/* --- Menu Modal --- */}
         <Modal animationType="slide" transparent visible={menuVisible} onRequestClose={() => setMenuVisible(false)}>
           <TouchableOpacity
             style={styles.modalOverlay}
@@ -290,7 +305,7 @@ export default function DashboardScreen({ navigation, route }) {
           >
             <View
               style={[styles.menuContainer, themeStyles.menuContainer]}
-              onStartShouldSetResponder={() => true} // Keep modal open when touching the menu area
+              onStartShouldSetResponder={() => true} // Keep modal open when touching menu area
             >
               <Text style={[styles.menuTitle, themeStyles.menuText]}>First Aid Guides</Text>
 
@@ -378,7 +393,6 @@ const styles = StyleSheet.create({
   bigButtonText: { color: "#fff", fontSize: 28, fontWeight: "bold", marginTop: 5 },
   bigButtonSubtitle: { color: "#fff", fontSize: 12, opacity: 0.8 },
 
-  // Main Grid Layout
   grid: {
     flexDirection: "row",
     flexWrap: "wrap",
@@ -386,24 +400,23 @@ const styles = StyleSheet.create({
     paddingHorizontal: 5,
   },
   card: {
-    width: "45%", // Two columns per row
+    width: "45%",
     height: 120,
     borderRadius: 15,
     justifyContent: "center",
     alignItems: "center",
     marginBottom: 15,
     padding: 10,
-    elevation: 3, // Shadow for Android
+    elevation: 3,
   },
   icon: { width: 50, height: 50, marginBottom: 5, resizeMode: "contain" },
   label: { fontSize: 14, fontWeight: "600", textAlign: "center" },
 
-  // Menu Modal Styles (Slide from left)
   modalOverlay: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.5)",
     justifyContent: "flex-start",
-    flexDirection: 'row', // Align menu to the left
+    flexDirection: 'row',
   },
   menuContainer: {
     width: "75%",

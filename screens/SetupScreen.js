@@ -12,7 +12,6 @@ import { Ionicons } from "@expo/vector-icons";
 import { ThemeContext } from "../ThemeContext";
 
 const SetupScreen = ({ navigation, route }) => {
-  // Ensure route.params exists before destructuring
   const { userData } = route.params || {}; 
   const { isDarkMode, toggleTheme } = useContext(ThemeContext);
 
@@ -79,11 +78,11 @@ const SetupScreen = ({ navigation, route }) => {
               borderColor: theme.buttonBorder,
             }
           ]}
-          onPress={() => navigation.navigate("PhysicalGestureSetupScreen", { userData })}
+          onPress={() => navigation.navigate("ShakeGestureSetupScreen", { userData })}
         >
           <Ionicons name="hand-right-outline" size={28} color={theme.buttonText} style={styles.optionIcon} />
           <Text style={[styles.optionText, { color: theme.buttonText }]}>
-            Physical Gesture Setup
+            Gesture Setup
           </Text>
         </TouchableOpacity>
 

@@ -19,7 +19,11 @@
         "NSCameraUsageDescription": "This app needs camera access to record videos",
         "NSMicrophoneUsageDescription": "This app needs microphone access to record audio with video",
         "NSPhotoLibraryAddUsageDescription": "This app needs access to save videos to your photo library",
-        "NSPhotoLibraryUsageDescription": "This app needs access to load videos from your photo library"
+        "NSPhotoLibraryUsageDescription": "This app needs access to load videos from your photo library",
+        "NSLocationWhenInUseUsageDescription": "This app needs your location to send SOS alerts"
+      },
+      "config": {
+        "googleMapsApiKey": "AIzaSyDDPMJX6hbHbRr4_8FlxfU3v8g-3Jm2pKU"
       }
     },
     "android": {
@@ -36,9 +40,15 @@
         "WRITE_EXTERNAL_STORAGE",
         "READ_EXTERNAL_STORAGE",
         "BODY_SENSORS",
-        "android.permission.RECORD_AUDIO",
-        "android.permission.MODIFY_AUDIO_SETTINGS"
-      ]
+        "MODIFY_AUDIO_SETTINGS",
+        "VIBRATE",
+        "ACCESS_FINE_LOCATION"
+      ],
+      "config": {
+        "googleMaps": {
+          "apiKey": "AIzaSyDDPMJX6hbHbRr4_8FlxfU3v8g-3Jm2pKU"
+        }
+      }
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -69,11 +79,6 @@
             "extraGradleArgs": [
               "-Pandroid.enableJetifier=true",
               "-Pandroid.useAndroidX=true"
-            ],
-            "extraMavenRepos": [
-              "allprojects.configurations.all { resolutionStrategy.force 'androidx.core:core:1.16.0' }",
-              "allprojects.configurations.all { exclude group: 'com.android.support', module: 'support-compat' }",
-              "allprojects.configurations.all { exclude group: 'com.android.support', module: 'versionedparcelable' }"
             ]
           }
         }
