@@ -1,0 +1,131 @@
+ALTER TABLE [dbo].[Rescuers]
+ADD IsIdVerified BIT DEFAULT 0;
+ADD ValidId VARCHAR(255) NULL;
+
+-- 1️⃣ Drop existing database if exists (⚠️ WARNING: this deletes all data!)
+IF EXISTS (SELECT name FROM sys.databases WHERE name = 'SafeKaFernandino')
+BEGIN
+    ALTER DATABASE SafeKaFernandino SET SINGLE_USER WITH ROLLBACK IMMEDIATE;
+    DROP DATABASE SafeKaFernandino;
+END
+GO
+
+-- 2️⃣ Create new database
+CREATE DATABASE SafeKaFernandino;
+GO
+
+USE SafeKaFernandino;
+GO
+
+-- 3️⃣ Users table
+CREATE TABLE Users (
+    Id INT IDENTITY(1,1) PRIMARY KEY,
+    Name NVARCHAR(100) NOT NULL,
+    Email NVARCHAR(100) UNIQUE NOT NULL,
+    PasswordHash NVARCHAR(256) NOT NULL,
+    Type NVARCHAR(50),
+    Gender NVARCHAR(10),
+    Mobile NVARCHAR(20),
+    Language NVARCHAR(20),
+    Birthdate DATE,
+    Address NVARCHAR(255),
+    ValidIdPath NVARCHAR(255),
+    IsIdVerified BIT DEFAULT 0,
+    GestureData NVARCHAR(MAX) NULL,
+    CreatedAt DATETIME DEFAULT GETDATE()
+);
+GO
+
+-- 4️⃣ Children table
+CREATE TABLE Children (
+    Id INT IDENTITY(1,1) PRIMARY KEY,
+    ParentId INT NOT NULL,
+    Name NVARCHAR(100) NOT NULL,
+    Email NVARCHAR(100) UNIQUE NOT NULL,
+    PasswordHash NVARCHAR(256) NOT NULL,
+    Gender NVARCHAR(10),
+    Birthdate DATE,
+    CurrentLatitude FLOAT NULL,
+    CurrentLongitude FLOAT NULL,
+    LastReportedAt DATETIME NULL,
+    CreatedAt DATETIME DEFAULT GETDATE(),
+    FOREIGN KEY (ParentId) REFERENCES Users(Id)
+);
+GO
+
+-- 5️⃣ Rescuers table
+CREATE TABLE Rescuers (
+    Id INT IDENTITY(1,1) PRIMARY KEY,
+    Name NVARCHAR(100) NOT NULL,
+    Email NVARCHAR(100) UNIQUE NOT NULL,
+    PasswordHash NVARCHAR(256) NOT NULL,
+    Type NVARCHAR(50),
+    Gender NVARCHAR(10),
+    Mobile NVARCHAR(20),
+    Language NVARCHAR(20),
+    Birthdate DATE,
+    Address NVARCHAR(255),
+    StationLocation NVARCHAR(255),
+    Latitude FLOAT,
+    Longitude FLOAT,
+    Contact NVARCHAR(20),
+    IsActive BIT DEFAULT 0,
+    CreatedAt DATETIME DEFAULT GETDATE()
+);
+GO
+
+-- 6️⃣ Admins table
+CREATE TABLE Admins (
+    Id INT IDENTITY(1,1) PRIMARY KEY,
+    Name NVARCHAR(100) NOT NULL,
+    Email NVARCHAR(100) UNIQUE NOT NULL,
+    PasswordHash NVARCHAR(256) NOT NULL,
+    Gender NVARCHAR(10),
+    Mobile NVARCHAR(20),
+    Language NVARCHAR(20),
+    Birthdate DATE,
+    Address NVARCHAR(255),
+    IsActive BIT DEFAULT 1
+);
+GO
+
+-- 7️⃣ Incidents table
+CREATE TABLE Incidents (
+    Id INT IDENTITY(1,1) PRIMARY KEY,
+    Type NVARCHAR(100),
+    Location NVARCHAR(255),
+    Latitude FLOAT NULL,
+    Longitude FLOAT NULL,
+    Status NVARCHAR(50) DEFAULT 'Pending',
+    UserId INT NULL,
+    ChildId INT NULL,
+    RescuerId INT NULL,
+    CreatedAt DATETIME DEFAULT GETDATE(),
+    FOREIGN KEY (UserId) REFERENCES Users(Id),
+    FOREIGN KEY (ChildId) REFERENCES Children(Id),
+    FOREIGN KEY (RescuerId) REFERENCES Rescuers(Id)
+);
+GO
+
+-- 8️⃣ OTP storage table
+CREATE TABLE OtpStorage (
+    Id INT IDENTITY(1,1) PRIMARY KEY,
+    Mobile NVARCHAR(20) UNIQUE NOT NULL,
+    OTP NVARCHAR(10) NOT NULL,
+    ExpiresAt DATETIME NOT NULL
+);
+GO
+
+-- 9️⃣ Emergency contacts table
+CREATE TABLE EmergencyContacts (
+    Id INT IDENTITY(1,1) PRIMARY KEY,
+    Name NVARCHAR(100) NOT NULL,
+    Relationship NVARCHAR(50),
+    Phone NVARCHAR(20) NOT NULL,
+    UserId INT NOT NULL,
+    CreatedAt DATETIME DEFAULT GETDATE(),
+    FOREIGN KEY (UserId) REFERENCES Users(Id)
+);
+GO
+
+-- ✅ Database created and ready for your Express app

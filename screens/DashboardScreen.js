@@ -12,6 +12,7 @@ import {
   Platform,
   StatusBar,
   ScrollView,
+  ActivityIndicator,
 } from "react-native";
 import { sendOfflineSMS } from '../utils/sendOfflineSMS';
 import Icon from "react-native-vector-icons/MaterialIcons";
@@ -21,44 +22,27 @@ import * as ImagePicker from "expo-image-picker";
 import * as Location from "expo-location";
 import axios from "axios";
 import { SERVER_URL } from "../config";
+
 const MAIN_ADMIN_NUMBER = "09752726146";
 const UNIFIED_EMERGENCY_NUMBER = "tel:911";
 
-// All required icons
 const icons = {
   police: require("../assets/police.png"),
   hospital: require("../assets/hospital.png"),
   firestation: require("../assets/firestation.png"),
   album: require("../assets/album.png"),
   contacts: require("../assets/contacts.png"),
-  nearby: require("../assets/nearby.png"), 
   shortcuts: require("../assets/shortcuts.png"),
   setup: require("../assets/setup.png"),
-  parentPanel: require("../assets/parentPanel.png"), 
+  parentPanel: require("../assets/parentPanel.png"),
 };
 
 export default function DashboardScreen({ navigation, route }) {
   const [menuVisible, setMenuVisible] = useState(false);
+  const [loading, setLoading] = useState(false);
   const { isDarkMode, toggleTheme } = useContext(ThemeContext);
-
   const loggedInUser = route.params?.userData;
 
-  const reportDistress = async () => {
-  if (!loggedInUser) return;
-
-  const adminMobile = '09752726146';
-  const message = `🚨 DISTRESS ALERT 🚨
-Type: Police
-Location: Barangay ABC
-Reported by: ${loggedInUser.name}
-User Phone: ${loggedInUser.mobile || 'N/A'}`;
-
-  // Call the offline SMS function
-  await sendOfflineSMS(adminMobile, message);
-};
-
-
-  // Redirect to login if user data is missing
   useEffect(() => {
     if (!loggedInUser) {
       navigation.reset({ index: 0, routes: [{ name: "LoginScreen" }] });
@@ -67,15 +51,13 @@ User Phone: ${loggedInUser.mobile || 'N/A'}`;
 
   if (!loggedInUser) return null;
 
-  // --- THEME STYLES (Moved to top of component for use in hooks/functions) ---
   const primaryColor = "#A83232";
+
   const themeStyles = {
-    container: {
-      backgroundColor: isDarkMode ? "#0E0E0E" : "#F4F4F9",
-    },
+    container: { backgroundColor: isDarkMode ? "#0E0E0E" : "#F4F4F9" },
     card: {
       backgroundColor: isDarkMode ? "#1C1C1C" : "#FFFFFF",
-      shadowColor: isDarkMode ? "#000" : "#000",
+      shadowColor: "#000",
       shadowOffset: { width: 0, height: 2 },
       shadowOpacity: 0.1,
       shadowRadius: 3.84,
@@ -83,57 +65,63 @@ User Phone: ${loggedInUser.mobile || 'N/A'}`;
     },
     text: { color: isDarkMode ? "#E0E0E0" : "#333333" },
     menuContainer: { backgroundColor: isDarkMode ? "#1E1E1E" : "#fff" },
-    menuText: { color: isDarkMode ? "#fff" : "#333" },
     bigButton: { backgroundColor: primaryColor },
   };
-  // --------------------------------------------------------------------------
 
-  // --------------------------- REPORT INCIDENT ---------------------------
-const reportIncident = async (service, immediateCall = false) => {
-  try {
-    let { status } = await Location.getForegroundPermissionsAsync();
-    if (status !== "granted") {
-      status = (await Location.requestForegroundPermissionsAsync()).status;
-    }
-    if (status !== "granted") {
-      Alert.alert("Permission Denied", "Location access is required.");
+  // --------------------------- INCIDENT REPORTING ---------------------------
+  const generateIncidentMessage = (service, locationText) => `
+🚨 DISTRESS ALERT 🚨
+Type: ${service}
+Location: ${locationText}
+Reported by: ${loggedInUser.name}
+User Phone: ${loggedInUser.mobile || 'N/A'}
+  `.trim();
+
+  const reportIncident = async (service, immediateCall = false) => {
+    setLoading(true);
+    try {
+      let { status } = await Location.getForegroundPermissionsAsync();
+      if (status !== "granted") {
+        status = (await Location.requestForegroundPermissionsAsync()).status;
+      }
+      if (status !== "granted") {
+        Alert.alert("Permission Denied", "Location access is required.");
+        setLoading(false);
+        return false;
+      }
+
+      const { coords } = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
+      const { latitude, longitude } = coords;
+      const [address] = await Location.reverseGeocodeAsync({ latitude, longitude });
+      const locationText = `${address.name || ""}, ${address.city || ""}, ${address.region || ""}`;
+      const message = generateIncidentMessage(service, locationText);
+
+      // Send to backend
+      await axios.post(`${SERVER_URL}/incidents`, {
+        Type: service,
+        Location: locationText,
+        Latitude: latitude,
+        Longitude: longitude,
+        Status: immediateCall ? "Calling 911" : "Pending",
+        UserId: loggedInUser?.Id,
+        ChildId: loggedInUser?.ChildId || null,
+        UserMobile: loggedInUser?.mobile || "",
+      });
+
+      // Send offline SMS fallback
+      await sendOfflineSMS(MAIN_ADMIN_NUMBER, message);
+
+      Alert.alert("✅ Success", "Incident reported! Admin has been notified.");
+      setLoading(false);
+      return true;
+    } catch (err) {
+      console.error(err);
+      Alert.alert("Error", "Failed to report incident. Check connectivity.");
+      setLoading(false);
       return false;
     }
+  };
 
-    const { coords } = await Location.getCurrentPositionAsync({
-      accuracy: Location.Accuracy.High,
-    });
-    const { latitude, longitude } = coords;
-
-    const [address] = await Location.reverseGeocodeAsync({ latitude, longitude });
-    const locationText = `${address.name || ""}, ${address.city || ""}, ${address.region || ""}`;
-
-    // Send incident to backend — backend handles SMS
-    const response = await axios.post(`${SERVER_URL}/incidents`, {
-      Type: service,
-      Location: locationText,
-      Latitude: latitude,
-      Longitude: longitude,
-      Status: immediateCall ? "Calling 911" : "Pending",
-      UserId: loggedInUser?.Id,
-      ChildId: loggedInUser?.ChildId || null,
-      UserMobile: loggedInUser?.Mobile || "",
-    });
-
-    if (response.data.success) {
-      Alert.alert("✅ Success", "Incident reported! SMS sent to admin.");
-    }
-
-    return response.data.success;
-  } catch (err) {
-    console.error(err);
-    Alert.alert("Error", "Failed to report incident. Check server connectivity.");
-    return false;
-  }
-};
-
-
-  // --------------------------- EMERGENCY CALL ---------------------------
   const handleEmergencyCall = async (service) => {
     Alert.alert(
       `Call ${service} (Dialing 911)`,
@@ -145,9 +133,13 @@ const reportIncident = async (service, immediateCall = false) => {
           onPress: async () => {
             const success = await reportIncident(service, true);
             if (success) {
-              const supported = await Linking.canOpenURL(UNIFIED_EMERGENCY_NUMBER);
-              if (supported) await Linking.openURL(UNIFIED_EMERGENCY_NUMBER);
-              else Alert.alert("Dialer Error", "Cannot open dialer.");
+              try {
+                const supported = await Linking.canOpenURL(UNIFIED_EMERGENCY_NUMBER);
+                if (supported) await Linking.openURL(UNIFIED_EMERGENCY_NUMBER);
+                else Alert.alert("Dialer Error", "Cannot open dialer.");
+              } catch (err) {
+                console.error(err);
+              }
             }
           },
         },
@@ -163,8 +155,6 @@ const reportIncident = async (service, immediateCall = false) => {
       { text: "Ambulance", onPress: () => handleEmergencyCall("Ambulance") },
     ]);
   };
-
-  /* -------------------------------------------------------------------------- */
 
   // --------------------------- MEDIA HANDLERS ---------------------------
   const handleRecordVideoChoice = () => {
@@ -203,16 +193,12 @@ const reportIncident = async (service, immediateCall = false) => {
       `Would you like to send this ${file.type === "video" ? "video" : "image"}?`,
       [
         { text: "Cancel", style: "cancel" },
-        {
-          text: "Send",
-          onPress: () => {
-            Alert.alert("Success", "Media sent to rescuer!");
-          },
-        },
+        { text: "Send", onPress: () => Alert.alert("Success", "Media sent to rescuer!") },
       ]
     );
   };
 
+  // --------------------------- UI ---------------------------
   return (
     <SafeAreaView style={[styles.safeArea, { backgroundColor: primaryColor }]}>
       <ScrollView contentContainerStyle={[styles.scrollContent, themeStyles.container]}>
@@ -234,16 +220,23 @@ const reportIncident = async (service, immediateCall = false) => {
 
         {/* Big Emergency Button */}
         <View style={styles.primaryButtonContainer}>
-          <TouchableOpacity style={[styles.bigButton, themeStyles.bigButton]} onPress={handleBigEmergencyButton}>
-            <Ionicons name="warning-outline" size={60} color="#fff" />
-            <Text style={styles.bigButtonText}>EMERGENCY</Text>
-            <Text style={styles.bigButtonSubtitle}>TAP for immediate assistance</Text>
+          <TouchableOpacity
+            style={[styles.bigButton, themeStyles.bigButton]}
+            onPress={handleBigEmergencyButton}
+            disabled={loading}
+          >
+            {loading ? <ActivityIndicator size="large" color="#fff" /> : (
+              <>
+                <Ionicons name="warning-outline" size={60} color="#fff" />
+                <Text style={styles.bigButtonText}>EMERGENCY</Text>
+                <Text style={styles.bigButtonSubtitle}>TAP for immediate assistance</Text>
+              </>
+            )}
           </TouchableOpacity>
         </View>
 
-        {/* Main Grid with All Buttons */}
+        {/* Grid Buttons */}
         <View style={styles.grid}>
-          {/* Row 1: Immediate Services */}
           <TouchableOpacity style={[styles.card, themeStyles.card]} onPress={() => handleEmergencyCall("Police")}>
             <Image source={icons.police} style={styles.icon} />
             <Text style={[styles.label, themeStyles.text]}>Police</Text>
@@ -280,7 +273,6 @@ const reportIncident = async (service, immediateCall = false) => {
             <Text style={[styles.label, themeStyles.text]}>Record Video</Text>
           </TouchableOpacity>
 
-          {/* Row 3: Utility/Setup */}
           <TouchableOpacity style={[styles.card, themeStyles.card]}>
             <Image source={icons.shortcuts} style={styles.icon} />
             <Text style={[styles.label, themeStyles.text]}>Shortcuts</Text>
@@ -293,145 +285,58 @@ const reportIncident = async (service, immediateCall = false) => {
             <Image source={icons.setup} style={styles.icon} />
             <Text style={[styles.label, themeStyles.text]}>Set-Up</Text>
           </TouchableOpacity>
-
         </View>
 
-        {/* --- Menu Modal --- */}
+        {/* Menu Modal */}
         <Modal animationType="slide" transparent visible={menuVisible} onRequestClose={() => setMenuVisible(false)}>
-          <TouchableOpacity
-            style={styles.modalOverlay}
-            activeOpacity={1}
-            onPressOut={() => setMenuVisible(false)}
-          >
-            <View
-              style={[styles.menuContainer, themeStyles.menuContainer]}
-              onStartShouldSetResponder={() => true} // Keep modal open when touching menu area
-            >
-              <Text style={[styles.menuTitle, themeStyles.menuText]}>First Aid Guides</Text>
-
-              {/* Loop for First Aid Screens */}
+          <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPressOut={() => setMenuVisible(false)}>
+            <View style={[styles.menuContainer, themeStyles.menuContainer]} onStartShouldSetResponder={() => true}>
+              <Text style={[styles.menuTitle, themeStyles.text]}>First Aid Guides</Text>
               {["CPRScreen", "WoundCareScreen", "SkinBurnScreen", "TutorialScreen"].map((screen, i) => {
                 const menuTitle = screen.replace("Screen", "").replace(/([A-Z])/g, " $1").trim();
                 return (
-                  <TouchableOpacity
-                    key={i}
-                    style={styles.menuItem}
-                    onPress={() => {
-                      setMenuVisible(false);
-                      navigation.navigate(screen);
-                    }}
-                  >
-                    <Text style={[styles.menuText, themeStyles.menuText]}>
-                      {menuTitle}
-                    </Text>
+                  <TouchableOpacity key={i} style={styles.menuItem} onPress={() => { setMenuVisible(false); navigation.navigate(screen); }}>
+                    <Text style={[styles.menuText, themeStyles.text]}>{menuTitle}</Text>
                   </TouchableOpacity>
                 );
               })}
 
-              {/* Settings Button */}
-              <TouchableOpacity
-                style={[styles.menuItem, { marginTop: 20 }]}
-                onPress={() => {
-                  setMenuVisible(false);
-                  navigation.navigate("SettingsScreen");
-                }}
-              >
-                <Text style={[styles.menuText, themeStyles.menuText, { fontWeight: 'bold' }]}>
-                  <Icon name="settings" size={16} color={isDarkMode ? "#fff" : "#333"} />
-                  {' Settings'}
+              <TouchableOpacity style={[styles.menuItem, { marginTop: 20 }]} onPress={() => { setMenuVisible(false); navigation.navigate("SettingsScreen"); }}>
+                <Text style={[styles.menuText, themeStyles.text, { fontWeight: 'bold' }]}>
+                  <Icon name="settings" size={16} color={isDarkMode ? "#fff" : "#333"} /> Settings
                 </Text>
               </TouchableOpacity>
 
-              {/* Log Out Button */}
-              <TouchableOpacity
-                style={styles.menuItem}
-                onPress={() => {
-                  setMenuVisible(false);
-                  navigation.replace("LoginScreen");
-                }}
-              >
+              <TouchableOpacity style={styles.menuItem} onPress={() => { setMenuVisible(false); navigation.replace("LoginScreen"); }}>
                 <Text style={[styles.menuText, { color: primaryColor, fontWeight: 'bold' }]}>
-                  <Icon name="logout" size={16} color={primaryColor} />
-                  {' Log Out'}
+                  <Icon name="logout" size={16} color={primaryColor} /> Log Out
                 </Text>
               </TouchableOpacity>
             </View>
           </TouchableOpacity>
         </Modal>
-
       </ScrollView>
     </SafeAreaView>
   );
 }
 
-// --------------------------- STYLES ---------------------------
 const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: "#A83232",
-    paddingTop: Platform.OS === "android" ? StatusBar.currentHeight : 0,
-  },
+  safeArea: { flex: 1, paddingTop: Platform.OS === "android" ? StatusBar.currentHeight : 0 },
   scrollContent: { paddingBottom: 20 },
-  header: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingHorizontal: 15,
-    paddingVertical: 12,
-  },
+  header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: 15, paddingVertical: 12 },
   headerTitle: { color: "#fff", fontSize: 20, fontWeight: "bold" },
   headerRight: { flexDirection: "row", alignItems: "center" },
   primaryButtonContainer: { alignItems: "center", marginVertical: 20 },
-  bigButton: {
-    width: 220,
-    height: 220,
-    borderRadius: 110,
-    justifyContent: "center",
-    alignItems: "center",
-    elevation: 10,
-  },
+  bigButton: { width: 220, height: 220, borderRadius: 110, justifyContent: "center", alignItems: "center", elevation: 10 },
   bigButtonText: { color: "#fff", fontSize: 28, fontWeight: "bold", marginTop: 5 },
   bigButtonSubtitle: { color: "#fff", fontSize: 12, opacity: 0.8 },
-
-  grid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    justifyContent: "space-around",
-    paddingHorizontal: 5,
-  },
-  card: {
-    width: "45%",
-    height: 120,
-    borderRadius: 15,
-    justifyContent: "center",
-    alignItems: "center",
-    marginBottom: 15,
-    padding: 10,
-    elevation: 3,
-  },
+  grid: { flexDirection: "row", flexWrap: "wrap", justifyContent: "space-around", paddingHorizontal: 5 },
+  card: { width: "45%", height: 120, borderRadius: 15, justifyContent: "center", alignItems: "center", marginBottom: 15, padding: 10, elevation: 3 },
   icon: { width: 50, height: 50, marginBottom: 5, resizeMode: "contain" },
   label: { fontSize: 14, fontWeight: "600", textAlign: "center" },
-
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.5)",
-    justifyContent: "flex-start",
-    flexDirection: 'row',
-  },
-  menuContainer: {
-    width: "75%",
-    padding: 20,
-    height: "100%",
-    paddingTop: Platform.OS === "android" ? StatusBar.currentHeight + 20 : 50,
-  },
-  menuTitle: {
-    fontSize: 20,
-    fontWeight: "bold",
-    marginBottom: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: '#ccc',
-    paddingBottom: 5,
-  },
+  modalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "flex-start", flexDirection: 'row' },
+  menuContainer: { width: "75%", padding: 20, height: "100%", paddingTop: Platform.OS === "android" ? StatusBar.currentHeight + 20 : 50 },
+  menuTitle: { fontSize: 20, fontWeight: "bold", marginBottom: 10, borderBottomWidth: 1, borderBottomColor: '#ccc', paddingBottom: 5 },
   menuItem: { paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: '#eee' },
   menuText: { fontSize: 16 },
 });

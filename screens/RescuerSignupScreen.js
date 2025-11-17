@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState } from "react"; 
 import { 
     View, 
     Text, 
@@ -7,13 +7,15 @@ import {
     StyleSheet, 
     ScrollView, 
     Alert, 
-    Platform 
+    Platform,
+    Image
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import MapView, { Marker } from "react-native-maps";
 import axios from "axios";
 import { Picker } from "@react-native-picker/picker";
 import DateTimePicker from "@react-native-community/datetimepicker";
+import * as ImagePicker from "expo-image-picker";
 import { SERVER_URL } from "../config";
 
 export default function RescuerSignupScreen({ navigation }) {
@@ -26,8 +28,8 @@ export default function RescuerSignupScreen({ navigation }) {
     const [language, setLanguage] = useState("");
     const [birthdate, setBirthdate] = useState(new Date());
     const [address, setAddress] = useState("");
-    const [stationLocation, setStationLocation] = useState(""); // station name
-    const [marker, setMarker] = useState({ latitude: 15.0330, longitude: 120.6849 }); // default center
+    const [stationLocation, setStationLocation] = useState("");
+    const [marker, setMarker] = useState({ latitude: 15.0330, longitude: 120.6849 });
     const [showDatePicker, setShowDatePicker] = useState(false);
     const [loading, setLoading] = useState(false);
 
@@ -36,7 +38,9 @@ export default function RescuerSignupScreen({ navigation }) {
     const [isOtpSent, setIsOtpSent] = useState(false);
     const [isMobileVerified, setIsMobileVerified] = useState(false);
     const [otpLoading, setOtpLoading] = useState(false);
-    // ------------------
+
+    // --- ID Upload State ---
+    const [validIdPath, setValidIdPath] = useState(null);
 
     const showDatePickerModal = () => setShowDatePicker(true);
     const onDateChange = (event, selectedDate) => {
@@ -44,9 +48,7 @@ export default function RescuerSignupScreen({ navigation }) {
         if (selectedDate) setBirthdate(selectedDate);
     };
 
-    const handleMapPress = (e) => {
-        setMarker(e.nativeEvent.coordinate);
-    };
+    const handleMapPress = (e) => setMarker(e.nativeEvent.coordinate);
 
     // ----------------- OTP Logic -----------------
     const handleSendOtp = async () => {
@@ -56,8 +58,7 @@ export default function RescuerSignupScreen({ navigation }) {
         }
         setOtpLoading(true);
         try {
-            // NOTE: Update the mobile field in the state with the server-side validated one if necessary
-            const response = await axios.post(`${SERVER_URL}/otp/send`, { mobile }); 
+            const response = await axios.post(`${SERVER_URL}/otp/send`, { mobile });
             if (response.data.success) {
                 setIsOtpSent(true);
                 Alert.alert("Success", "OTP sent! Check your phone.");
@@ -95,50 +96,83 @@ export default function RescuerSignupScreen({ navigation }) {
     };
     // ---------------------------------------------
 
+    // ----------------- Valid ID Picker -----------------
+    const pickValidId = async () => {
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission Denied', 'We need access to your media library to pick an ID.');
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        quality: 0.8,
+      });
+
+      if (!result.canceled) {
+        setValidIdPath(result.assets[0]);
+      }
+    }
+    // ---------------------------------------------
+
     const handleSignup = async () => {
-        if (!name || !email || !password || !address || !stationLocation) {
-            Alert.alert("Missing Fields", "Please fill in all required fields.");
-            return;
-        }
+      if (!name || !email || !password || !address || !stationLocation) {
+        return Alert.alert("Missing Fields", "Please fill in all required fields.");
+      }
+      if (!isMobileVerified) {
+        return Alert.alert("Verification Required", "Please verify your mobile number before registering.");
+      }
+      if (!validIdPath) {
+        return Alert.alert("ID Required", "Please upload a valid ID before signing up.");
+      }
 
-        // --- NEW: Check for mobile verification ---
-        if (!isMobileVerified) {
-            Alert.alert("Verification Required", "Please verify your mobile number before registering.");
-            return;
-        }
-        // ------------------------------------------
+      setLoading(true);
+      try {
+        const formData = new FormData();
+        formData.append("name", name);
+        formData.append("email", email);
+        formData.append("password", password);
+        formData.append("type", type);
+        formData.append("gender", gender);
+        formData.append("mobile", mobile);
+        formData.append("language", language);
+        formData.append("birthdate", birthdate.toISOString().split("T")[0]);
+        formData.append("address", address);
+        formData.append("stationLocation", stationLocation);
+        formData.append("latitude", marker.latitude.toString());
+        formData.append("longitude", marker.longitude.toString());
+        formData.append("contact", mobile);
 
-        setLoading(true);
-        try {
-            const response = await axios.post(`${SERVER_URL}/rescuers/signup`, {
-                name,
-                email,
-                password,
-                type,
-                gender,
-                mobile,
-                language,
-                birthdate: birthdate.toISOString().split("T")[0],
-                address,
-                stationLocation,
-                latitude: marker.latitude,
-                longitude: marker.longitude,
-                contact: mobile
-            });
+        const fileExt = validIdPath.uri.split('.').pop();
+        const mimeType = fileExt === "png" ? "image/png" : "image/jpeg";
 
-            if (response.data.success) {
-                Alert.alert("Signup Success", response.data.message);
-                navigation.goBack();
-            } else {
-                Alert.alert("Signup Failed", response.data.message);
-            }
-        } catch (error) {
-            console.error("Signup Error:", error.message);
-            Alert.alert("Signup Failed", "Cannot connect to server.");
-        } finally {
-            setLoading(false);
+        formData.append("validIdPath", {
+          uri: validIdPath.uri,
+          name: `${name.replace(/\s+/g, "_")}_ID.${fileExt}`,
+          type: mimeType,
+        });
+
+        const response = await axios.post(`${SERVER_URL}/rescuers/signup`, formData, {
+          headers: { "Content-Type": "multipart/form-data" },
+          maxContentLength: Infinity,
+          maxBodyLength: Infinity,
+        });
+
+        if (response.data.success) {
+          Alert.alert("Signup Success", response.data.message);
+          navigation.goBack();
+        } else {
+          Alert.alert("Signup Failed", response.data.message);
         }
+      } catch (error) {
+        console.error("Signup Error:", error.message, error.response?.data);
+        Alert.alert("Signup Failed", "Cannot connect to server.");
+      } finally {
+        setLoading(false);
+      }
     };
+
 
     return (
         <LinearGradient colors={["#ee7d7dff", "#8B0000"]} style={styles.container}>
@@ -164,11 +198,11 @@ export default function RescuerSignupScreen({ navigation }) {
                     </Picker>
                 </View>
 
-                {/* --- Mobile + OTP Section --- */}
+                {/* --- Mobile + OTP --- */}
                 <View style={styles.mobileContainer}>
                     <TextInput 
                         style={[styles.input, styles.mobileInput]} 
-                        placeholder="Mobile (e.g., 09xxxxxxxxx)" 
+                        placeholder="Mobile (09xxxxxxxxx)" 
                         value={mobile} 
                         onChangeText={text => { setMobile(text); setIsMobileVerified(false); setIsOtpSent(false); }} 
                         keyboardType="phone-pad" 
@@ -198,16 +232,13 @@ export default function RescuerSignupScreen({ navigation }) {
                         </TouchableOpacity>
                     </View>
                 )}
-                {/* ---------------------------- */}
 
                 <TextInput style={styles.input} placeholder="Language" value={language} onChangeText={setLanguage} />
 
                 <TouchableOpacity style={styles.datePickerButton} onPress={showDatePickerModal}>
                     <Text style={styles.datePickerText}>Birthdate: {birthdate.toDateString()}</Text>
                 </TouchableOpacity>
-                {showDatePicker && (
-                    <DateTimePicker value={birthdate} mode="date" display="default" maximumDate={new Date()} onChange={onDateChange} />
-                )}
+                {showDatePicker && <DateTimePicker value={birthdate} mode="date" display="default" maximumDate={new Date()} onChange={onDateChange} />}
 
                 <TextInput style={styles.input} placeholder="Address" value={address} onChangeText={setAddress} />
                 <TextInput style={styles.input} placeholder="Station Name" value={stationLocation} onChangeText={setStationLocation} />
@@ -226,6 +257,12 @@ export default function RescuerSignupScreen({ navigation }) {
                     <Marker coordinate={marker} title="Station Location" />
                 </MapView>
 
+                {/* --- Upload ID Button --- */}
+                <TouchableOpacity style={styles.idButton} onPress={pickValidId}>
+                    <Text style={styles.idButtonText}>{validIdPath ? "ID Selected ✅" : "Upload Valid ID"}</Text>
+                </TouchableOpacity>
+                {validIdPath && <Image source={{ uri: validIdPath.uri }} style={styles.previewImage} />}
+
                 <TouchableOpacity style={styles.registerButton} onPress={handleSignup} disabled={loading || !isMobileVerified}>
                     <Text style={styles.registerText}>{loading ? "Signing up..." : "Sign Up"}</Text>
                 </TouchableOpacity>
@@ -238,24 +275,78 @@ const styles = StyleSheet.create({
     container: { flex: 1 },
     scroll: { padding: 20 },
     header: { fontSize: 28, fontWeight: "bold", color: "#fff", textAlign: "center", marginBottom: 20 },
-    input: { backgroundColor: "#fff", borderRadius: 10, padding: 12, marginBottom: 10 },
-    pickerContainer: { backgroundColor: "#fff", borderRadius: 10, marginBottom: 10 },
-    datePickerButton: { backgroundColor: "#fff", borderRadius: 10, padding: 15, marginBottom: 10 },
-    datePickerText: { color: "#000" },
+    input: {
+        backgroundColor: "#fff",
+        borderRadius: 15,
+        paddingVertical: 14,
+        paddingHorizontal: 18,
+        marginBottom: 15,
+        fontSize: 16,
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.15,
+        shadowRadius: 4,
+        elevation: 3
+    },
+    pickerContainer: {
+        backgroundColor: "#fff",
+        borderRadius: 15,
+        marginBottom: 15,
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.15,
+        shadowRadius: 4,
+        elevation: 3
+    },
+    datePickerButton: {
+        backgroundColor: "#fff",
+        borderRadius: 15,
+        paddingVertical: 14,
+        paddingHorizontal: 18,
+        marginBottom: 15,
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.15,
+        shadowRadius: 4,
+        elevation: 3
+    },
+    datePickerText: { color: "#000", fontSize: 16 },
     mapLabel: { fontSize: 16, marginBottom: 5, marginTop: 10, color: "#fff" },
-    map: { width: "100%", height: 200, marginBottom: 10 },
-    registerButton: { backgroundColor: "#fff", paddingVertical: 15, borderRadius: 10, marginTop: 10 },
-    registerText: { textAlign: "center", fontWeight: "bold", fontSize: 24, color: "#000" },
-
-    // --- NEW OTP Styles ---
-    mobileContainer: { flexDirection: 'row', alignItems: 'center', marginBottom: 10 },
+    map: { width: "100%", height: 200, marginBottom: 15, borderRadius: 15 },
+    registerButton: {
+        backgroundColor: "#fff",
+        paddingVertical: 16,
+        borderRadius: 20,
+        marginTop: 10,
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 3 },
+        shadowOpacity: 0.2,
+        shadowRadius: 5,
+        elevation: 5
+    },
+    registerText: { textAlign: "center", fontWeight: "bold", fontSize: 20, color: "#000" },
+    mobileContainer: { flexDirection: 'row', alignItems: 'center', marginBottom: 15 },
     mobileInput: { flex: 1, marginBottom: 0, marginRight: 8 },
-    otpButton: { backgroundColor: '#f6c770', paddingVertical: 10, paddingHorizontal: 15, borderRadius: 10 },
-    otpText: { fontWeight: "bold", color: "#000", fontSize: 12 },
-    verifiedText: { backgroundColor: 'rgba(0,255,0,0.2)', padding: 10, borderRadius: 10, color: "#fff", fontWeight: "bold", fontSize: 12, overflow: 'hidden' },
-    otpVerifyContainer: { flexDirection: 'row', alignItems: 'center', marginBottom: 10 },
+    otpButton: { backgroundColor: '#f6c770', paddingVertical: 12, paddingHorizontal: 18, borderRadius: 15, shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.15, shadowRadius: 3, elevation: 3 },
+    otpText: { fontWeight: "bold", color: "#000", fontSize: 14 },
+    verifiedText: { backgroundColor: 'rgba(0,255,0,0.2)', padding: 12, borderRadius: 15, color: "#fff", fontWeight: "bold", fontSize: 14, textAlign: "center" },
+    otpVerifyContainer: { flexDirection: 'row', alignItems: 'center', marginBottom: 15 },
     otpInput: { flex: 1, marginBottom: 0, marginRight: 8, padding: 12 },
-    verifyButton: { backgroundColor: '#70f6c7', paddingVertical: 10, paddingHorizontal: 15, borderRadius: 10 },
-    verifyText: { fontWeight: "bold", color: "#000", fontSize: 12 },
-    // ----------------------
+    verifyButton: { backgroundColor: '#70f6c7', paddingVertical: 12, paddingHorizontal: 18, borderRadius: 15, shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.15, shadowRadius: 3, elevation: 3 },
+    verifyText: { fontWeight: "bold", color: "#000", fontSize: 14 },
+
+    // ID upload button
+    idButton: {
+        backgroundColor: "#3498db",
+        paddingVertical: 14,
+        borderRadius: 15,
+        marginBottom: 15,
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.15,
+        shadowRadius: 3,
+        elevation: 3
+    },
+    idButtonText: { color: "#fff", textAlign: "center", fontWeight: "bold", fontSize: 16 },
+    previewImage: { width: "100%", height: 200, borderRadius: 15, marginBottom: 15 }
 });

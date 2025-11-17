@@ -1,8 +1,7 @@
-// ShakeGestureScreen.js (UI only)
+// ShakeGestureScreen.js (UI-only, no volume button UI)
 import React, { useContext } from "react";
 import { View, Text, Switch, StyleSheet, TouchableOpacity } from "react-native";
 import { GlobalListenerContext } from "../contexts/GlobalListenerContext";
-
 
 export default function ShakeGestureScreen() {
   const {
@@ -10,8 +9,6 @@ export default function ShakeGestureScreen() {
     setShakeEnabled,
     volumeEnabled,
     setVolumeEnabled,
-    setVolumeUpPressed,
-    setVolumeDownPressed,
     saveSettings,
   } = useContext(GlobalListenerContext);
 
@@ -32,27 +29,6 @@ export default function ShakeGestureScreen() {
       <TouchableOpacity style={styles.saveBtn} onPress={saveSettings}>
         <Text style={styles.saveText}>Save Settings</Text>
       </TouchableOpacity>
-
-      <Text style={{ marginTop: 30, fontWeight: "600" }}>
-        Press both volume buttons simultaneously
-      </Text>
-      <View style={styles.volumeRow}>
-        <TouchableOpacity
-          style={styles.volumeBtn}
-          onPressIn={() => setVolumeUpPressed(true)}
-          onPressOut={() => setVolumeUpPressed(false)}
-        >
-          <Text style={styles.volumeText}>Volume Up</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.volumeBtn}
-          onPressIn={() => setVolumeDownPressed(true)}
-          onPressOut={() => setVolumeDownPressed(false)}
-        >
-          <Text style={styles.volumeText}>Volume Down</Text>
-        </TouchableOpacity>
-      </View>
     </View>
   );
 }
@@ -70,14 +46,4 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   saveText: { color: "#fff", fontWeight: "bold", fontSize: 16 },
-  volumeRow: { flexDirection: "row", justifyContent: "space-between", marginTop: 20 },
-  volumeBtn: {
-    backgroundColor: "#f97316",
-    padding: 15,
-    borderRadius: 10,
-    alignItems: "center",
-    flex: 1,
-    marginHorizontal: 5,
-  },
-  volumeText: { color: "#fff", fontWeight: "bold", fontSize: 16 },
 });

@@ -26,7 +26,6 @@ export default function ChildSignupScreen({ route, navigation }) {
     const [birthdate, setBirthdate] = useState(new Date());
     const [showDatePicker, setShowDatePicker] = useState(false);
 
-    // OTP states
     const [otp, setOtp] = useState("");
     const [isOtpSent, setIsOtpSent] = useState(false);
     const [isMobileVerified, setIsMobileVerified] = useState(false);
@@ -38,7 +37,6 @@ export default function ChildSignupScreen({ route, navigation }) {
         if (selectedDate) setBirthdate(selectedDate);
     };
 
-    // ---------------- OTP Handlers ----------------
     const handleSendOtp = async () => {
         if (!mobile || mobile.length < 10) {
             Alert.alert("Invalid Mobile", "Please enter a valid mobile number.");
@@ -83,7 +81,6 @@ export default function ChildSignupScreen({ route, navigation }) {
         }
     };
 
-    // ---------------- Registration ----------------
     const handleSignup = async () => {
         if (!isMobileVerified) {
             Alert.alert("Verification Required", "Please verify mobile before signing up.");
@@ -120,37 +117,24 @@ export default function ChildSignupScreen({ route, navigation }) {
 
     return (
         <LinearGradient colors={["#ee7d7dff", "#8B0000"]} style={{ flex: 1 }}>
-            <ScrollView contentContainerStyle={{ padding: 20 }}>
+            <ScrollView contentContainerStyle={styles.scroll}>
                 <Text style={styles.title}>Create Child Account</Text>
 
-                <TextInput 
-                    style={styles.input} 
-                    placeholder="Child Name" 
-                    value={name} 
-                    onChangeText={setName} 
-                />
+                <TextInput style={styles.input} placeholder="Child Name" value={name} onChangeText={setName} />
+                <TextInput style={styles.input} placeholder="Email" value={email} onChangeText={setEmail} keyboardType="email-address" />
 
-                <TextInput 
-                    style={styles.input} 
-                    placeholder="Email" 
-                    value={email} 
-                    onChangeText={setEmail} 
-                    keyboardType="email-address" 
-                />
-
-                {/* Mobile Input with OTP */}
                 <View style={styles.mobileContainer}>
                     <TextInput
                         style={[styles.input, { flex: 1 }]}
                         placeholder="Mobile (09xxxxxxxxx)"
                         value={mobile}
-                        onChangeText={(text) => { setMobile(text); setIsMobileVerified(false); }}
+                        onChangeText={text => { setMobile(text); setIsMobileVerified(false); setIsOtpSent(false); }}
                         keyboardType="phone-pad"
                         editable={!isMobileVerified}
                     />
                     {!isMobileVerified ? (
-                        <TouchableOpacity style={styles.otpButton} onPress={handleSendOtp} disabled={otpLoading || isOtpSent}>
-                            <Text style={styles.otpButtonText}>{isOtpSent ? "Resend OTP" : "Send OTP"}</Text>
+                        <TouchableOpacity style={styles.otpButton} onPress={handleSendOtp} disabled={otpLoading || (isOtpSent && otpLoading)}>
+                            <Text style={styles.otpText}>{isOtpSent ? "Resend OTP" : "Send OTP"}</Text>
                         </TouchableOpacity>
                     ) : (
                         <Text style={styles.verifiedText}>✅ Verified</Text>
@@ -159,16 +143,16 @@ export default function ChildSignupScreen({ route, navigation }) {
 
                 {isOtpSent && !isMobileVerified && (
                     <View style={styles.mobileContainer}>
-                        <TextInput 
-                            style={[styles.input, { flex: 1 }]} 
-                            placeholder="Enter 6-digit OTP" 
-                            value={otp} 
-                            onChangeText={setOtp} 
+                        <TextInput
+                            style={[styles.input, { flex: 1 }]}
+                            placeholder="Enter OTP"
+                            value={otp}
+                            onChangeText={setOtp}
                             keyboardType="numeric"
-                            maxLength={6} 
+                            maxLength={6}
                         />
                         <TouchableOpacity style={styles.otpButton} onPress={handleVerifyOtp} disabled={otpLoading}>
-                            <Text style={styles.otpButtonText}>Verify</Text>
+                            <Text style={styles.otpText}>{otpLoading ? "Verifying..." : "Verify"}</Text>
                         </TouchableOpacity>
                     </View>
                 )}
@@ -195,13 +179,7 @@ export default function ChildSignupScreen({ route, navigation }) {
                     />
                 )}
 
-                <TextInput 
-                    style={styles.input} 
-                    placeholder="Password" 
-                    secureTextEntry 
-                    value={password} 
-                    onChangeText={setPassword} 
-                />
+                <TextInput style={styles.input} placeholder="Password" secureTextEntry value={password} onChangeText={setPassword} />
 
                 <TouchableOpacity style={styles.registerButton} onPress={handleSignup}>
                     <Text style={styles.registerText}>Create Account</Text>
@@ -212,15 +190,68 @@ export default function ChildSignupScreen({ route, navigation }) {
 }
 
 const styles = StyleSheet.create({
+    scroll: { padding: 20 },
     title: { fontSize: 28, fontWeight: "bold", color: "#fff", textAlign: "center", marginBottom: 20 },
-    input: { backgroundColor: "#fff", borderRadius: 10, padding: 12, marginBottom: 15, fontSize: 16 },
-    pickerContainer: { backgroundColor: "#fff", borderRadius: 10, marginBottom: 15 },
-    datePickerButton: { backgroundColor: "#fff", borderRadius: 10, padding: 15, marginBottom: 15 },
-    datePickerText: { color: "#000" },
-    registerButton: { backgroundColor: "#fff", paddingVertical: 15, borderRadius: 10, marginTop: 10 },
-    registerText: { textAlign: "center", fontWeight: "bold", fontSize: 20 },
-    mobileContainer: { flexDirection: "row", alignItems: "center", marginBottom: 10 },
-    otpButton: { backgroundColor: "#f6c770", paddingVertical: 10, paddingHorizontal: 15, borderRadius: 10 },
-    otpButtonText: { fontWeight: "bold", color: "#000", fontSize: 12 },
-    verifiedText: { color: "white", fontWeight: "bold", marginLeft: 10 },
+    input: {
+        backgroundColor: "#fff",
+        borderRadius: 15,
+        paddingVertical: 14,
+        paddingHorizontal: 18,
+        marginBottom: 15,
+        fontSize: 16,
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.15,
+        shadowRadius: 4,
+        elevation: 3
+    },
+    pickerContainer: {
+        backgroundColor: "#fff",
+        borderRadius: 15,
+        marginBottom: 15,
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.15,
+        shadowRadius: 4,
+        elevation: 3
+    },
+    datePickerButton: {
+        backgroundColor: "#fff",
+        borderRadius: 15,
+        paddingVertical: 14,
+        paddingHorizontal: 18,
+        marginBottom: 15,
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.15,
+        shadowRadius: 4,
+        elevation: 3
+    },
+    datePickerText: { color: "#000", fontSize: 16 },
+    registerButton: {
+        backgroundColor: "#fff",
+        paddingVertical: 16,
+        borderRadius: 20,
+        marginTop: 10,
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 3 },
+        shadowOpacity: 0.2,
+        shadowRadius: 5,
+        elevation: 5
+    },
+    registerText: { textAlign: "center", fontWeight: "bold", fontSize: 20, color: "#000" },
+    mobileContainer: { flexDirection: "row", alignItems: "center", marginBottom: 15 },
+    otpButton: {
+        backgroundColor: "#f6c770",
+        paddingVertical: 12,
+        paddingHorizontal: 18,
+        borderRadius: 15,
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.15,
+        shadowRadius: 3,
+        elevation: 3
+    },
+    otpText: { fontWeight: "bold", color: "#000", fontSize: 14 },
+    verifiedText: { color: "#fff", fontWeight: "bold", marginLeft: 10, fontSize: 14 }
 });

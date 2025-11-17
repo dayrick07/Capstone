@@ -7,10 +7,11 @@ const path = require('path');
 const { generateOTP } = require('./generate_otp'); 
 const axios = require('axios');
 const app = express();
+const fs = require('fs');
 const multer = require('multer');
 app.use(cors());
-app.use(bodyParser.json());
-
+app.use(express.urlencoded({ extended: true }));
+app.use(express.json());
 // ---------- SQL Server Config ----------
 const config = {
   user: 'app_user',
@@ -22,8 +23,39 @@ const config = {
     trustServerCertificate: true,
   }
 };
+// ---------- GENERAL USER ID STORAGE ----------
+const userStorage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    const uploadDir = `C:/Users/CapstoneProject/uploads/ids/users`;
+    if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
+    cb(null, uploadDir);
+  },
+  filename: (req, file, cb) => {
+    let name = req.body.name || 'user';
+    name = name.replace(/\s+/g, '_').replace(/[^a-zA-Z0-9_-]/g, '');
+    const timestamp = Date.now();
+    const ext = path.extname(file.originalname);
+    cb(null, `${name}-${timestamp}${ext}`);
+  }
+});
 
-
+// ---------- RESCUER ID STORAGE ----------
+const rescuerStorage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    const uploadDir = `C:/Users/CapstoneProject/uploads/ids/rescuers`;
+    if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
+    cb(null, uploadDir);
+  },
+  filename: (req, file, cb) => {
+    let name = req.body.name || 'rescuer';
+    name = name.replace(/\s+/g, '_').replace(/[^a-zA-Z0-9_-]/g, '');
+    const timestamp = Date.now();
+    const ext = path.extname(file.originalname);
+    cb(null, `${name}-${timestamp}${ext}`);
+  }
+});
+const uploadUserId = multer({ storage: userStorage });
+const uploadRescuerId = multer({ storage: rescuerStorage });
 // ---------- Create Connection Pool ----------
 let pool;
 async function getPool() {
@@ -38,74 +70,90 @@ app.get('/test', (req, res) => {
   res.send({ success: true, message: "API is running!" });
 });
 
-// ---------------- 🧍‍♀️ USER SIGNUP ----------------
-app.post('/users/signup', async (req, res) => {
-    const { name, email, password, type, gender, mobile, language, birthdate, address } = req.body;
+// ----------------- Serve uploads folder as static ----------------
+app.use('/uploads/users', express.static('C:/Users/CapstoneProject/uploads/ids/users'));
+app.use('/uploads/rescuers', express.static('C:/Users/CapstoneProject/uploads/ids/rescuers'));
 
-    if (!name || !email || !password || !type || !gender || !language || !birthdate || !address) {
-        return res.status(400).json({ success: false, message: 'Missing required fields.' });
-    }
+// ---------------- USER SIGNUP ----------------
+app.post('/users/signup', uploadUserId.single('validId'), async (req, res) => {
+  try {
+    const { name, email, password, type, gender, mobile, language, birthdate, address } = req.body || {};
 
-    try {
-        // Hash password
-        const hashedPassword = await bcrypt.hash(password, 10);
+    if (!name || !email || !password || !req.file) {
+      return res.status(400).send({ success: false, error: 'Fill all fields and upload valid ID' });
+    }
 
-        const pool = await sql.connect(config);
-        await pool.request()
-            .input('Name', sql.NVarChar, name)
-            .input('Email', sql.NVarChar, email)
-            .input('PasswordHash', sql.NVarChar, hashedPassword)
-            .input('Type', sql.NVarChar, type)
-            .input('Gender', sql.NVarChar, gender)
-            .input('Mobile', sql.NVarChar, mobile)
-            .input('Language', sql.NVarChar, language)
-            .input('Birthdate', sql.Date, birthdate)
-            .input('Address', sql.NVarChar, address)
-            .query(`
-                INSERT INTO Users (Name, Email, PasswordHash, Type, Gender, Mobile, Language, Birthdate, Address)
-                VALUES (@Name, @Email, @PasswordHash, @Type, @Gender, @Mobile, @Language, @Birthdate, @Address)
-            `);
+    const validIdPath = req.file.path; // store uploaded file path
+    const hashedPassword = await bcrypt.hash(password, 10);
 
-        res.json({ success: true, message: 'User registered successfully.' });
-    } catch (err) {
-        console.error(err);
-        res.status(500).json({ success: false, message: 'Server error.' });
-    }
+    const pool = await getPool();
+    await pool.request()
+      .input('name', sql.VarChar, name)
+      .input('email', sql.VarChar, email)
+      .input('password', sql.VarChar, hashedPassword)
+      .input('type', sql.VarChar, type)
+      .input('gender', sql.VarChar, gender)
+      .input('mobile', sql.VarChar, mobile)
+      .input('language', sql.VarChar, language)
+      .input('birthdate', sql.Date, birthdate)
+      .input('address', sql.VarChar, address)
+      .input('validIdPath', sql.VarChar, validIdPath)
+      .input('isIdVerified', sql.Bit, 0) // default not verified
+      .query(`
+        INSERT INTO Users
+        (Name, Email, PasswordHash, Type, Gender, Mobile, Language, Birthdate, Address, ValidIdPath, IsIdVerified, CreatedAt)
+        VALUES
+        (@name,@email,@password,@type,@gender,@mobile,@language,@birthdate,@address,@validIdPath,@isIdVerified,GETDATE())
+      `);
+
+    res.send({ success: true, message: 'User registered! ID pending verification.' });
+
+  } catch (err) {
+    console.error('Signup error:', err);
+    res.status(500).send({ success: false, error: err.message });
+  }
 });
-// Fetch users where IsIdVerified = 0
-app.get('/admin/unverified-users', async (req, res) => {
-    try {
-        const pool = await sql.connect(config);
-        const result = await pool.request()
-            .query(`SELECT Id, Name, Email, Mobile, Address, Birthdate, Gender, Language, ValidIdPath
-                    FROM Users
-                    WHERE IsIdVerified = 0`);
-
-        res.json(result.recordset);
-    } catch (err) {
-        console.error(err);
-        res.status(500).json({ success: false, message: 'Failed to fetch users.' });
-    }
+// ---------------- ADMIN PENDING USERS ----------------
+app.get('/admin/pending-users', async (req, res) => {
+  try {
+    const pool = await getPool();
+    const result = await pool.request()
+      .query(`SELECT Id, Name, Email, Mobile, ValidIdPath AS validId FROM Users WHERE IsIdVerified = 0`);
+    res.json(result.recordset);
+  } catch (err) {
+    console.error("Error fetching pending users:", err);
+    res.status(500).send({ success: false, error: err.message });
+  }
 });
-// Mark a user's ID as verified
-app.post('/admin/verify-user', async (req, res) => {
-    const { userId } = req.body;
 
-    if (!userId) {
-        return res.status(400).json({ success: false, message: 'Missing userId.' });
-    }
+// ---------------- ADMIN APPROVE ----------------
+app.post('/admin/approve/:id', async (req, res) => {
+  const { id } = req.params;
+  try {
+    const pool = await getPool();
+    await pool.request()
+      .input('id', sql.Int, id)
+      .query(`UPDATE Users SET IsIdVerified = 1 WHERE Id = @id`);
+    res.send({ success: true });
+  } catch (err) {
+    console.error("Error approving user:", err);
+    res.status(500).send({ success: false, error: err.message });
+  }
+});
 
-    try {
-        const pool = await sql.connect(config);
-        await pool.request()
-            .input('UserId', sql.Int, userId)
-            .query(`UPDATE Users SET IsIdVerified = 1 WHERE Id = @UserId`);
-
-        res.json({ success: true, message: `User #${userId} verified successfully.` });
-    } catch (err) {
-        console.error(err);
-        res.status(500).json({ success: false, message: 'Failed to verify user.' });
-    }
+// ---------------- ADMIN REJECT ----------------
+app.post('/admin/reject/:id', async (req, res) => {
+  const { id } = req.params;
+  try {
+    const pool = await getPool();
+    await pool.request()
+      .input('id', sql.Int, id)
+      .query(`UPDATE Users SET IsIdVerified = -1 WHERE Id = @id`);
+    res.send({ success: true });
+  } catch (err) {
+    console.error("Error rejecting user:", err);
+    res.status(500).send({ success: false, error: err.message });
+  }
 });
 
 // ---------------- 🧒 CHILD SIGNUP ----------------
@@ -139,52 +187,102 @@ app.post('/children/signup', async (req, res) => {
   }
 });
 
-// ---------------- 🧍‍♂️ RESCUER SIGNUP ----------------
-app.post('/rescuers/signup', async (req, res) => {
-  const {
-    name, email, password, type, gender, mobile, language, birthdate,
-    address, stationLocation, latitude, longitude, contact
-  } = req.body;
 
-  try {
-    const pool = await getPool();
+// ---------------- RESCUER SIGNUP ----------------
+app.post('/rescuers/signup', uploadRescuerId.single('validIdPath'), async (req, res) => {
+  try {
+    const { name, email, password, type, gender, mobile, language, birthdate, address, stationLocation, latitude, longitude, contact } = req.body;
 
-    const existing = await pool.request()
-      .input('email', sql.VarChar, email)
-      .query('SELECT * FROM Rescuers WHERE Email = @email');
+    if (!name || !email || !password || !req.file) {
+      return res.status(400).send({ success: false, message: 'Fill all fields and upload valid ID' });
+    }
 
-    if (existing.recordset.length > 0)
-      return res.status(400).send({ success: false, message: 'Email already registered.' });
+    const validIdPath = req.file.path; // multer stores the path
+    const hashedPassword = await bcrypt.hash(password, 10);
+    const pool = await getPool();
 
-    const hashedPassword = await bcrypt.hash(password, 10);
+    // Check for duplicate email
+    const existing = await pool.request()
+      .input('email', sql.VarChar, email)
+      .query('SELECT * FROM Rescuers WHERE Email = @email');
+    if (existing.recordset.length > 0)
+      return res.status(400).send({ success: false, message: 'Email already registered.' });
 
-    await pool.request()
-      .input('name', sql.VarChar, name)
-      .input('email', sql.VarChar, email)
-      .input('password', sql.VarChar, hashedPassword)
-      .input('type', sql.VarChar, type)
-      .input('gender', sql.VarChar, gender)
-      .input('mobile', sql.VarChar, mobile)
-      .input('language', sql.VarChar, language)
-      .input('birthdate', sql.Date, birthdate)
-      .input('address', sql.VarChar, address)
-      .input('stationLocation', sql.VarChar, stationLocation)
-      .input('latitude', sql.Float, latitude)
-      .input('longitude', sql.Float, longitude)
-      .input('contact', sql.VarChar, contact)
-      .query(`
-        INSERT INTO Rescuers
-        (Name, Email, PasswordHash, Type, Gender, Mobile, Language, Birthdate, Address, StationLocation, Latitude, Longitude, Contact, CreatedAt)
-        VALUES
-        (@name, @email, @password, @type, @gender, @mobile, @language, @birthdate, @address, @stationLocation, @latitude, @longitude, @contact, GETDATE())
-      `);
+    await pool.request()
+      .input('name', sql.VarChar, name)
+      .input('email', sql.VarChar, email)
+      .input('password', sql.VarChar, hashedPassword)
+      .input('type', sql.VarChar, type)
+      .input('gender', sql.VarChar, gender)
+      .input('mobile', sql.VarChar, mobile)
+      .input('language', sql.VarChar, language)
+      .input('birthdate', sql.Date, birthdate)
+      .input('address', sql.VarChar, address)
+      .input('stationLocation', sql.VarChar, stationLocation)
+      .input('latitude', sql.Float, latitude)
+      .input('longitude', sql.Float, longitude)
+      .input('contact', sql.VarChar, contact)
+      .input('validIdPath', sql.VarChar, validIdPath)
+      .input('isIdVerified', sql.Bit, 0)
+      .query(`
+        INSERT INTO Rescuers
+        (Name, Email, PasswordHash, Type, Gender, Mobile, Language, Birthdate, Address, StationLocation, Latitude, Longitude, Contact, ValidIdPath, IsIdVerified, CreatedAt)
+        VALUES
+        (@name,@email,@password,@type,@gender,@mobile,@language,@birthdate,@address,@stationLocation,@latitude,@longitude,@contact,@validIdPath,@isIdVerified,GETDATE())
+      `);
 
-    res.send({ success: true, message: 'Rescuer registered successfully!' });
-  } catch (err) {
-    console.error('❌ Rescuer Signup Error:', err);
-    res.status(500).send({ success: false, error: err.message });
-  }
+    res.send({ success: true, message: 'Rescuer registered! ID pending verification.' });
+
+  } catch (err) {
+    console.error('Rescuer Signup Error:', err);
+    res.status(500).send({ success: false, message: err.message });
+  }
 });
+
+// Get pending rescuers
+app.get('/admin/pending-rescuers', async (req, res) => {
+  try {
+    const pool = await getPool();
+    const result = await pool.request()
+      .query(`SELECT Id, Name, Email, Mobile, ValidIdPath FROM Rescuers WHERE IsIdVerified = 0`);
+    res.json(result.recordset);
+  } catch (err) {
+    console.error('Pending rescuers error:', err);
+    res.status(500).send({ success: false, message: err.message });
+  }
+});
+
+
+// Approve rescuer ID
+app.post('/admin/rescuers/approve/:id', async (req, res) => {
+  try {
+    const pool = await getPool();
+    await pool.request()
+      .input('id', sql.Int, req.params.id)
+      .query(`UPDATE Rescuers SET IsIdVerified = 1 WHERE Id = @id`);
+    res.send({ success: true, message: 'Rescuer approved.' });
+  } catch (err) {
+    console.error('Approve error:', err);
+    res.status(500).send({ success: false, message: err.message });
+  }
+});
+
+// Reject rescuer ID
+app.post('/admin/rescuers/reject/:id', async (req, res) => {
+  try {
+    const pool = await getPool();
+    await pool.request()
+      .input('id', sql.Int, req.params.id)
+      .query(`UPDATE Rescuers SET IsIdVerified = -1 WHERE Id = @id`);
+    res.send({ success: true, message: 'Rescuer rejected.' });
+  } catch (err) {
+    console.error('Reject error:', err);
+    res.status(500).send({ success: false, message: err.message });
+  }
+});
+
+
+
 // ---------------- 🧍‍♂️ Admins SIGNUP ----------------
 app.post('/admins/signup', async (req, res) => {
     const { name, email, password, gender, mobile, language, birthdate, address } = req.body;
@@ -265,7 +363,7 @@ app.post('/otp/send', async (req, res) => {
         }
 
         // 4. Send OTP via iProgTech SMS API
-        const apiToken = 'd53783f0bbfd7010b6d873dcde2a0e34b3a824d7';
+        const apiToken = 'sd53783f0bbfd7010b6d873dcde2a0e34b3a824d7';
         const message = `Fernandino, Your OTP code is: ${otpCode}`;
 
         const smsResponse = await axios.post(

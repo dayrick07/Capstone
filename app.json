@@ -2,7 +2,7 @@
   "expo": {
     "name": "Safekafe",
     "slug": "Safekafe",
-    "owner": "dayrick07",
+    "owner": "dayrick",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -42,7 +42,9 @@
         "BODY_SENSORS",
         "MODIFY_AUDIO_SETTINGS",
         "VIBRATE",
-        "ACCESS_FINE_LOCATION"
+        "ACCESS_FINE_LOCATION",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.MODIFY_AUDIO_SETTINGS"
       ],
       "config": {
         "googleMaps": {
@@ -52,11 +54,6 @@
     },
     "web": {
       "favicon": "./assets/favicon.png"
-    },
-    "extra": {
-      "eas": {
-        "projectId": "2e0b68e1-9fd9-4f4c-9926-b35839f12541"
-      }
     },
     "plugins": [
       "expo-audio",
@@ -83,6 +80,11 @@
           }
         }
       ]
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "50ff872c-ae24-47f4-920d-dec2d5802e21"
+      }
+    }
   }
 }

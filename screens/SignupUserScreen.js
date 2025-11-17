@@ -14,6 +14,7 @@ import { Picker } from "@react-native-picker/picker";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import axios from "axios";
 import { SERVER_URL } from "../config";
+import * as ImagePicker from "expo-image-picker";
 
 export default function SignupUserScreen({ navigation }) {
     const [fullName, setFullName] = useState("");
@@ -32,6 +33,8 @@ export default function SignupUserScreen({ navigation }) {
     const [isOtpSent, setIsOtpSent] = useState(false);
     const [isMobileVerified, setIsMobileVerified] = useState(false);
     const [otpLoading, setOtpLoading] = useState(false);
+
+    const [validId, setValidId] = useState(null); // ✅ Valid ID
 
     const showDatePickerModal = () => setShowDatePicker(true);
     const onDateChange = (event, selectedDate) => {
@@ -84,50 +87,51 @@ export default function SignupUserScreen({ navigation }) {
         }
     };
 
+    // ----------------- Valid ID Picker -----------------
+   const pickValidId = async () => {
+  const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+  if (status !== 'granted') {
+    Alert.alert('Permission Denied', 'We need access to your media library to pick an ID.');
+    return;
+  }
+
+  const result = await ImagePicker.launchImageLibraryAsync({
+    mediaTypes: ImagePicker.MediaTypeOptions.Images,
+    allowsEditing: true,
+    quality: 0.8,
+  });
+
+  if (!result.canceled) {
+    setValidId(result.assets[0]); // setValidId is your state setter
+  }
+}
+
+
     // ----------------- Registration -----------------
-    const handleRegister = async () => {
-        if (!isMobileVerified) {
-            Alert.alert("Verification Required", "Please verify your mobile number before registering.");
-            return;
-        }
-        if (!fullName || !address || !email || !password || !gender || !language || !birthdate) {
-            Alert.alert("Missing Fields", "Please fill in all required fields.");
-            return;
-        }
+const handleRegister = async () => {
+  if (!fullName || !email || !password || !validId) return Alert.alert("Fill all fields and select ID");
 
-        setLoading(true);
-        const userData = {
-            name: fullName,
-            email: email,
-            password: password,
-            type: 'user',
-            gender: gender,
-            mobile: mobile,
-            language: language,
-            birthdate: birthdate.toISOString().split("T")[0],
-            address: address,
-        };
+  const formData = new FormData();
+  formData.append('name', fullName);
+  formData.append('email', email);
+  formData.append('password', password);
+  formData.append('type', 'user');
+  formData.append('gender', gender);
+  formData.append('mobile', mobile);
+  formData.append('language', language);
+  formData.append('birthdate', birthdate.toISOString().split('T')[0]);
+  formData.append('address', address);
+  formData.append('validId', { uri: validId.uri, type: 'image/jpeg', name: 'valid_id.jpg' });
 
-        try {
-            const response = await axios.post(`${SERVER_URL}/users/signup`, userData);
-            if (response.data.success) {
-                setRegisteredUserId(response.data.userId);
-                Alert.alert("Success", `${response.data.message}\nYour User ID is: ${response.data.userId}`);
-                navigation.replace("LoginScreen");
-            } else {
-                Alert.alert("Error", response.data.message);
-            }
-        } catch (error) {
-            console.error("Registration Error:", error.response ? error.response.data : error.message);
-            Alert.alert("Error", `Unable to register. ${error.message}`);
-        } finally {
-            setLoading(false);
-        }
-    };
+  const response = await axios.post(`${SERVER_URL}/users/signup`, formData, {
+    headers: { 'Content-Type': 'multipart/form-data' }
+  });
 
+  if (response.data.success) Alert.alert("Success", response.data.message);
+};
     return (
         <LinearGradient colors={["#ee7d7dff", "#8B0000"]} style={{ flex: 1 }}>
-            <ScrollView contentContainerStyle={{ padding: 20 }}>
+            <ScrollView contentContainerStyle={styles.container}>
                 <Text style={styles.title}>User Registration</Text>
 
                 <TextInput style={styles.input} placeholder="Full Name" value={fullName} onChangeText={setFullName} />
@@ -194,6 +198,19 @@ export default function SignupUserScreen({ navigation }) {
                 </TouchableOpacity>
                 {showDatePicker && <DateTimePicker value={birthdate} mode="date" display="default" maximumDate={new Date()} onChange={onDateChange} />}
 
+                {/* Valid ID Upload */}
+                <View style={{ marginBottom: 15 }}>
+                    <Text style={{ color: '#fff', marginBottom: 8, fontWeight: 'bold' }}>Upload Valid ID</Text>
+                    <TouchableOpacity 
+                        style={[styles.input, { justifyContent: 'center', alignItems: 'center' }]} 
+                        onPress={pickValidId}
+                    >
+                        <Text style={{ color: validId ? '#000' : '#888' }}>
+                            {validId ? 'ID Selected ✅' : 'Tap to select ID'}
+                        </Text>
+                    </TouchableOpacity>
+                </View>
+
                 <TextInput style={styles.input} placeholder="Password" secureTextEntry value={password} onChangeText={setPassword} />
 
                 <TouchableOpacity style={styles.registerBtn} onPress={handleRegister} disabled={loading || !isMobileVerified}>
@@ -211,21 +228,68 @@ export default function SignupUserScreen({ navigation }) {
 }
 
 const styles = StyleSheet.create({
-    title: { fontSize: 28, fontWeight: "bold", color: "#fff", textAlign: "center", marginBottom: 20 },
-    input: { backgroundColor: "#fff", borderRadius: 10, padding: 12, marginBottom: 12 },
-    picker: { backgroundColor: "#fff", borderRadius: 10, marginBottom: 12 },
-    datePickerBtn: { backgroundColor: "#fff", borderRadius: 10, padding: 15, marginBottom: 12 },
-    datePickerText: { color: "#000" },
-    registerBtn: { backgroundColor: "#fff", paddingVertical: 15, borderRadius: 10, marginTop: 10 },
+    container: { padding: 20, paddingBottom: 40 },
+    title: { fontSize: 28, fontWeight: "bold", color: "#fff", textAlign: "center", marginBottom: 25 },
+
+    input: {
+        backgroundColor: "#fff",
+        borderRadius: 15,
+        paddingVertical: 14,
+        paddingHorizontal: 18,
+        marginBottom: 15,
+        fontSize: 16,
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.15,
+        shadowRadius: 4,
+        elevation: 3
+    },
+
+    picker: {
+        backgroundColor: "#fff",
+        borderRadius: 15,
+        marginBottom: 15,
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.15,
+        shadowRadius: 4,
+        elevation: 3
+    },
+
+    datePickerBtn: {
+        backgroundColor: "#fff",
+        borderRadius: 15,
+        paddingVertical: 14,
+        paddingHorizontal: 18,
+        marginBottom: 15,
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.15,
+        shadowRadius: 4,
+        elevation: 3
+    },
+    datePickerText: { color: "#000", fontSize: 16 },
+
+    registerBtn: {
+        backgroundColor: "#fff",
+        paddingVertical: 16,
+        borderRadius: 20,
+        marginTop: 10,
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 3 },
+        shadowOpacity: 0.2,
+        shadowRadius: 5,
+        elevation: 5
+    },
     registerText: { textAlign: "center", fontWeight: "bold", fontSize: 20, color: "#000" },
     successMsg: { marginTop: 20, textAlign: "center", color: "#fff", fontWeight: "bold" },
 
-    mobileContainer: { flexDirection: 'row', alignItems: 'center', marginBottom: 12 },
+    mobileContainer: { flexDirection: 'row', alignItems: 'center', marginBottom: 15 },
     mobileInput: { flex: 1, marginBottom: 0, marginRight: 8 },
-    otpButton: { backgroundColor: '#f6c770', paddingVertical: 10, paddingHorizontal: 15, borderRadius: 10 },
-    otpText: { fontWeight: "bold", color: "#000" },
-    verifiedText: { backgroundColor: 'rgba(0,255,0,0.2)', padding: 10, borderRadius: 10, color: "#fff", fontWeight: "bold" },
-    otpVerifyContainer: { flexDirection: 'row', alignItems: 'center', marginBottom: 12 },
+    otpButton: { backgroundColor: '#f6c770', paddingVertical: 12, paddingHorizontal: 18, borderRadius: 15, shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.15, shadowRadius: 3, elevation: 3 },
+    otpText: { fontWeight: "bold", color: "#000", fontSize: 14 },
+    verifiedText: { backgroundColor: 'rgba(0,255,0,0.2)', padding: 12, borderRadius: 15, color: "#fff", fontWeight: "bold", fontSize: 14, textAlign: "center" },
+    otpVerifyContainer: { flexDirection: 'row', alignItems: 'center', marginBottom: 15 },
     otpInput: { flex: 1, marginBottom: 0, marginRight: 8 },
-    verifyButton: { backgroundColor: '#70f6c7', paddingVertical: 10, paddingHorizontal: 15, borderRadius: 10 },
+    verifyButton: { backgroundColor: '#70f6c7', paddingVertical: 12, paddingHorizontal: 18, borderRadius: 15, shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.15, shadowRadius: 3, elevation: 3 }
 });
